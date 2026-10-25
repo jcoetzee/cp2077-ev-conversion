@@ -567,7 +567,7 @@ def main():
     if SOUND["hybrid"]:
         vanilla_audio = rdar.extract(audio_hybrid.GAME_ARCHIVE, audio_hybrid.DEPOT_PATH)
         hybrid_audio, audio_report = audio_hybrid.build_hybrid(vanilla_audio)
-        audio_hybrid.verify(hybrid_audio, audio_report)
+        audio_hybrid.verify(hybrid_audio, audio_report, vanilla_audio)
         packed.append((audio_hybrid.DEPOT_PATH, hybrid_audio, len(hybrid_audio)))
     arc_path = os.path.join(out, "archive", f"{MOD_NAME}.archive")
     rdar.write_archive(arc_path, packed)
