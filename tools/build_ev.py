@@ -64,12 +64,13 @@ SOUND = {
     # Audition: vehicle record -> (player profile, traffic profile) to borrow.
     # Round 1 (MaiMai, Aerondight) sounded like the cars' own engines: either the swap
     # had no effect or the profiles are too similar. Round 2 uses unmistakable profiles.
-    # Round 2: Basilisk worked on the Hella ("good"); metro had no effect (game fell back
-    # to the car's own profile). Round 3: Basilisk on both cars, at full volume.
-    "audition": {
-        "v_standard2_archer_hella_player": ("v_av_basilisk_tank", "v_av_basilisk_tank_traffic"),
-        "v_sport1_quadra_sport_r7_player_02": ("v_av_basilisk_tank", "v_av_basilisk_tank_traffic"),  # "Vigilante" (LocKey#93555)
-    },
+    # Audition: vehicle record -> (player profile, traffic profile) to borrow.
+    # Superseded by "hybrid" (below); kept empty so no vehicle borrows a whole profile.
+    "audition": {},
+    # Hybrid profiles (tools/audio_hybrid.py): every car/bike keeps its own sound profile
+    # (brakes, tyres, horn, doors, radio) with the engine section replaced by the Basilisk's.
+    # Ships as a replacement of base\sound\metadata\cooked_metadata.audio_metadata.
+    "hybrid": True,
 }
 
 # Custom torque curves
@@ -87,6 +88,7 @@ CHASSIS = {
 }
 
 import accel  # noqa: E402
+import audio_hybrid  # noqa: E402
 import curvewriter  # noqa: E402
 import ev_single  # noqa: E402
 import rdar  # noqa: E402
@@ -253,13 +255,12 @@ def find_wheel_presets(recs, tdb):
     records that carry maxBrakingTorque.
     Returns [(compiled_name, label, fields)].
     """
-    out = []
+    pat = re.compile(r"(frontPreset|backPreset)\s*=\s*\{")
+    named, inline = [], []
     for name in recs:
         chain = chain_of(recs, name)
         if any("WheelDrivingPreset" in r or "WheelPreset" in r for r in chain + [recs[chain[-1]][0]]):
-            if all(tdb.has(f"Vehicle.{name}.{p}") for p in WHEEL_PROBE):
-                out.append((name, name, resolve(recs, name)[0]))
-    pat = re.compile(r"(frontPreset|backPreset)\s*=\s*\{")
+            named.append(name)
     for name, (_parent, body) in recs.items():
         blocks = []
         for m in pat.finditer(body):
@@ -268,8 +269,19 @@ def find_wheel_presets(recs, tdb):
             tail = re.match(r"\s*:\s*([A-Za-z0-9_.]+)", body[end + 1 :])
             if tail and "Dimension" not in tail.group(1):
                 blocks.append((m.group(1), tail.group(1).split(".")[-1], body[start + 1 : end]))
-        if not blocks:
-            continue
+        if blocks:
+            inline.append((name, blocks))
+
+    # Warm the lookup cache in parallel with every name the checks below will evaluate
+    # first (all() short-circuits, so later probes only run where the first one matched).
+    tdb.has_many([f"Vehicle.{n}.{WHEEL_PROBE[0]}" for n in named]
+                 + [f"Vehicle.{n}_inline{i}.{WHEEL_PROBE[0]}" for n, _b in inline for i in range(200)])
+
+    out = []
+    for name in named:
+        if all(tdb.has(f"Vehicle.{name}.{p}") for p in WHEEL_PROBE):
+            out.append((name, name, resolve(recs, name)[0]))
+    for name, blocks in inline:
         compiled = [f"{name}_inline{i}" for i in range(200)
                     if all(tdb.has(f"Vehicle.{name}_inline{i}.{p}") for p in WHEEL_PROBE)]
         if len(compiled) != len(blocks):
@@ -426,14 +438,27 @@ def engine_time(f, gears, bands, torque, mass, shift_time, G):
 
 
 def main():
+    import time
+    from concurrent.futures import ProcessPoolExecutor
+    import multiprocessing as mp
+
     from tweakdb import TweakDB
+
+    sys.stdout.reconfigure(line_buffering=True)  # progress shows up when redirected to a log
+    t0 = time.time()
+
+    def step(msg):
+        print(f"[{time.time() - t0:6.1f}s] {msg}")
 
     tdb = TweakDB()
     recs = load_records()
-    engines = {c: (lbl, f, g) for c, lbl, f, g, _o in find_engines(recs, tdb) if g and len(g) >= 2}
-    drives = {c: (lbl, f) for c, lbl, f, _g, _o in find_drive_models(recs, tdb)}
-    inline_engine = {o: c for c, _l, _f, _g, o in find_engines(recs, tdb) if o}
-    inline_drive = {o: c for c, _l, _f, _g, o in find_drive_models(recs, tdb) if o}
+    found_engines = find_engines(recs, tdb)
+    found_drives = find_drive_models(recs, tdb)
+    step(f"found {len(found_engines)} engine and {len(found_drives)} drive-model records")
+    engines = {c: (lbl, f, g) for c, lbl, f, g, _o in found_engines if g and len(g) >= 2}
+    drives = {c: (lbl, f) for c, lbl, f, _g, _o in found_drives}
+    inline_engine = {o: c for c, _l, _f, _g, o in found_engines if o}
+    inline_drive = {o: c for c, _l, _f, _g, o in found_drives if o}
 
     def compiled(link, inline_map):
         if not link:
@@ -464,16 +489,23 @@ def main():
     users = {}
     for v, (e, d) in vehicles.items():
         users.setdefault(e, []).append((v, d))
-    designs = {}
-    for e, (lbl, f, g) in engines.items():
-        if e in TEST_KEEP_VANILLA_ENGINE:
-            continue
-        curve = f.get("gearCurvesPath", "small_torquey_na").split("\\")[-1].replace(".curveset", "")
-        masses = sorted({num(drives[d][1], "total_mass", "1300") for _v, d in users.get(e, [])}) or [1500.0]
-        designs[e] = ev_single.design(
-            curve, vanilla_bands(f, g), num(f, "engineMaxTorque", "180"),
-            num(f, "minRPM", "800"), num(f, "maxRPM", "5000"), num(f, "gearChangeTime", "0.3"),
-            masses, CHASSIS["mass_factor"], EV["shift_time"], G, rpm_cap=SOUND["rpm_cap"])
+    designs, jobs = {}, {}
+    workers = os.cpu_count() or 1
+    step(f"fitting {len(engines)} engines on {workers} processes")
+    with ProcessPoolExecutor(workers, mp_context=mp.get_context("spawn")) as pool:
+        for e, (lbl, f, g) in engines.items():
+            if e in TEST_KEEP_VANILLA_ENGINE:
+                continue
+            curve = f.get("gearCurvesPath", "small_torquey_na").split("\\")[-1].replace(".curveset", "")
+            masses = sorted({num(drives[d][1], "total_mass", "1300") for _v, d in users.get(e, [])}) or [1500.0]
+            jobs[e] = pool.submit(
+                ev_single.design,
+                curve, vanilla_bands(f, g), num(f, "engineMaxTorque", "180"),
+                num(f, "minRPM", "800"), num(f, "maxRPM", "5000"), num(f, "gearChangeTime", "0.3"),
+                masses, CHASSIS["mass_factor"], EV["shift_time"], G, rpm_cap=SOUND["rpm_cap"])
+        for e, job in jobs.items():  # collected in submission order, so output order is unchanged
+            designs[e] = job.result()
+    step("engines fitted")
 
     # One curve file per distinct base-speed fraction (rounded), shared between engines
     curve_files = {}
@@ -500,6 +532,8 @@ def main():
     chassis_recs = {d: convert_chassis(f, d in bike_drives or "2w" in d) for d, (lbl, f) in drives.items()}
     # Brakes: same braking torque per kg as vanilla, so stopping distances are unchanged
     wheel_presets = find_wheel_presets(recs, tdb)
+    tdb.save()
+    step(f"found {len(wheel_presets)} wheel preset records")
     for c, _lbl, f in wheel_presets:
         if "maxBrakingTorque" in f:
             chassis_recs[c] = {"maxBrakingTorque": round(num(f, "maxBrakingTorque", "0") * CHASSIS["mass_factor"], 1)}
@@ -515,6 +549,8 @@ def main():
     for stem, recs_out, title in [(MOD_NAME, engine_recs, "engines"),
                                   (f"{MOD_NAME}_Chassis", chassis_recs, "chassis"),
                                   (f"{MOD_NAME}_Audio", audio_recs, "audio")]:
+        if not recs_out:
+            continue
         open(os.path.join(tw, f"{stem}.yaml"), "w").write(to_yaml(recs_out, title))
         open(os.path.join(tw, f"{stem}.json"), "w").write(to_json(recs_out) + "\n")
     about = {"ModInfo": {"ModName": MOD_NAME, "ModID": -1}}
@@ -527,14 +563,23 @@ def main():
         raw = curvewriter.build(pts, platform=PLATFORM)
         seg = raw if STORAGE == "raw" else rdar.kark_stored(raw)
         packed.append((depot, seg, len(raw)))
+    hybrid_audio = None
+    if SOUND["hybrid"]:
+        vanilla_audio = rdar.extract(audio_hybrid.GAME_ARCHIVE, audio_hybrid.DEPOT_PATH)
+        hybrid_audio, audio_report = audio_hybrid.build_hybrid(vanilla_audio)
+        audio_hybrid.verify(hybrid_audio, audio_report)
+        packed.append((audio_hybrid.DEPOT_PATH, hybrid_audio, len(hybrid_audio)))
     arc_path = os.path.join(out, "archive", f"{MOD_NAME}.archive")
     rdar.write_archive(arc_path, packed)
+    step(f"archive written ({len(packed)} files)")
     # read every file back through the archive reader + curve decoder
     idx = rdar.read_index(arc_path)
     for depot, pts in curve_files.items():
         back = curveset.find_curve(rdar.extract(arc_path, depot, idx))[1]
         assert len(back) == len(pts) and all(abs(a - c) < 1e-5 and abs(b - d) < 1e-5
                                              for (a, b), (c, d) in zip(back, pts)), depot
+    if hybrid_audio is not None:
+        assert rdar.extract(arc_path, audio_hybrid.DEPOT_PATH, idx) == hybrid_audio
 
     with open(os.path.join(ROOT, "build", "engine_report.txt"), "w") as rpt:
         rpt.write(f"G={G:.5f}  target={accel.TARGET_KMH_SPEEDO:.0f} km/h speedometer "

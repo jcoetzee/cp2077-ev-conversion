@@ -26,10 +26,11 @@ Tested on the macOS build (GOG, Update 2.5).
 - Engines, chassis and brakes: working in-game.
 - Custom torque curves: working. Curve files must be stored raw in the archive (stored size ==
   real size). A Kraken header around uncompressed data is not readable by the game.
-- Sound: swapping a vehicle's `player_audio_resource` to `v_av_basilisk_tank` removes the
-  combustion-engine sound and shift sounds, but that profile has no brake, tyre, horn, door or
-  radio sounds. Next step: a hybrid profile that only replaces each vehicle's engine section in
-  `base\sound\metadata\cooked_metadata.audio_metadata`.
+- Sound: hybrid profiles (`tools/audio_hybrid.py`). Every car and bike keeps its own sound
+  profile (brakes, tyres, horn, doors, radio) with the engine section replaced by the
+  Basilisk hover tank's, and gear-shift sweeteners removed. Ships as a replacement of
+  `base\sound\metadata\cooked_metadata.audio_metadata`, so it conflicts with other mods that
+  replace that file. In-game test pending.
 - Not yet done: PC/console-stamped curve files, standalone mod folder, mod.io upload.
 
 ## Repository layout
@@ -43,6 +44,8 @@ Tested on the macOS build (GOG, Update 2.5).
 | `tools/rdar.py` | Reader and writer for REDengine 4 `.archive` files. |
 | `tools/curveset.py`, `tools/curvewriter.py` | Read and write cooked `.curveset` (CR2W) files. Writer reproduces vanilla files byte for byte. |
 | `tools/cr2w_walk.py`, `tools/cr2w_probe.py` | Read-only CR2W inspection. |
+| `tools/cr2w_edit.py` | Rebuilds a CR2W file with export chunks replaced (round-trips vanilla files byte for byte). |
+| `tools/audio_hybrid.py` | Builds the hybrid vehicle sound profiles. |
 | `tools/extract_audio_meta.py` | Extracts the vehicle audio metadata for inspection. |
 | `tools/extract_curves.py` | Extracts the vanilla engine torque curves (setup step 4). |
 | `tools/diag*_build.py` | Diagnostic builds used to isolate in-game problems (kept for reference). |
@@ -63,7 +66,9 @@ Python 3 (standard library only), Xcode command line tools, Homebrew.
    ```
 3. Build the Kraken decompressor: `sh tools/ooz_port/build.sh`
 4. Extract the vanilla torque curves: `python3 tools/extract_curves.py`
-5. Generate the mod: `python3 tools/build_ev.py`
+5. Generate the mod: `python3 tools/build_ev.py` (about 90 s the first time, about 15 s after
+   that: TweakDB lookups are cached in `build/tweakdb_lookup_cache.json`, and lookups and
+   engine fitting run on all CPU cores).
 
 Paths to the game install are currently hard-coded for the GOG Mac build
 (`/Applications/Cyberpunk 2077`).
