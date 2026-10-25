@@ -1,5 +1,6 @@
 # Secrets
 .modio_key
+.modio_token
 
 # Game files and anything extracted from them (CD PROJEKT RED content, not ours to share)
 redmod/

@@ -11,13 +11,41 @@ advantage.
 
 | Area | Change |
 |---|---|
-| Gearbox | One forward gear from standstill to vanilla top speed. No shifts. |
+| Gearbox | One forward gear from standstill to vanilla top speed. No shifts. Reverse and shift timings stay vanilla. |
 | Torque | Custom torque curve per engine: flat to a base speed, then constant power (falls with 1/speed). |
 | Calibration | Engine torque is scaled so 0-100 km/h (speedometer) and 0-80% of top speed match vanilla. |
 | Response | Flywheel inertia halved; lift-off resistance x1.5 (regen-like). |
 | Chassis | Mass and moment of inertia +10% (battery pack, 2077 cell density assumed); centre of mass 5 cm lower on cars. |
 | Brakes | Brake and handbrake torque +10%, so stopping distances match vanilla. |
 | Sound | Engine sound replaced by the Basilisk hover tank's on every car and bike; brakes, tyres, horn, doors and radio unchanged; no shift sounds. |
+
+### Every field changed
+
+Tweak records (`r6/tweaks/`), applied to every compiled record of each kind:
+
+| Record | Field | Change | Records |
+|---|---|---|---|
+| Engine (`VehicleEngineData`) | `gears` | Reverse kept; forward gears replaced by one gear: 0 to vanilla top speed, idle to redline | 81 |
+| | `gearCurvesPath` | Points to an EV torque curve in the mod archive | 81 |
+| | `engineMaxTorque` | Scaled per engine by the 0-100 calibration (x0.69 to x2.07, median x1.02) | 81 |
+| | `finalGearTorqueDecimationScalor` | 1.0 (vanilla cuts top-gear torque; with one gear that cut would apply at every speed) | 81 |
+| | `flyWheelMomentOfInertia` | x0.5 | 81 |
+| | `resistanceTorque` | x1.5 | 81 |
+| Drive model (`vehDriveModelData` / `bikeDriveModelData`) | `total_mass`, `chassis_mass` | x1.10 | 117 |
+| | `momentOfInertia` | x1.10 (where set) | 89 |
+| | `center_of_mass_offset` | z lowered 5 cm (cars only) | 108 |
+| | `handbrakeBrakingTorque` | x1.10 | 117 |
+| Wheel preset (front/back) | `maxBrakingTorque` | x1.10 | 230 |
+
+Archive files (`archive/EVConversion.archive`):
+
+| File | Change |
+|---|---|
+| `base\gameplay\vehicles\curves\engine_torque\ev_conversion\*.curveset` | New: 22 EV torque curves, shared between engines |
+| `base\sound\metadata\cooked_metadata.audio_metadata` | Replaces vanilla: 172 car and bike sound profiles get the Basilisk's engine section; gear-shift sweeteners removed |
+
+Not changed: drivetrains, top speed, tyre grip, suspension, steering, gear shift and reverse
+timings, and every non-vehicle record.
 
 ## Status
 

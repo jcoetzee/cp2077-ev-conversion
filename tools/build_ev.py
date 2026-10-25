@@ -30,9 +30,10 @@ import curveset  # noqa: E402
 EV = {
     "flywheel_scale": 0.5,   # x vanilla flyWheelMomentOfInertia
     "resistance_scale": 1.5,  # x vanilla resistanceTorque (lift-off regen feel)
-    # Must stay above 0: with exactly 0 the engine revs but never drives (found in-game).
-    # Vanilla never goes below 0.2 s. Applies to reverse <-> forward changes.
-    "shift_time": 0.05,
+    # gearChangeTime/gearChangeCooldown override. None keeps each engine's vanilla values:
+    # with a single forward gear they only apply to reverse <-> forward changes.
+    # Never use 0: the engine then revs but never drives (found in-game). 0.05 s worked.
+    "shift_time": None,
 }
 
 SOUND = {
@@ -431,7 +432,9 @@ def main():
                 ev_single.design,
                 curve, vanilla_bands(f, g), num(f, "engineMaxTorque", "180"),
                 num(f, "minRPM", "800"), num(f, "maxRPM", "5000"), num(f, "gearChangeTime", "0.3"),
-                masses, CHASSIS["mass_factor"], EV["shift_time"], G, rpm_cap=SOUND["rpm_cap"])
+                masses, CHASSIS["mass_factor"],
+                EV["shift_time"] if EV["shift_time"] is not None else num(f, "gearChangeTime", "0.3"),
+                G, rpm_cap=SOUND["rpm_cap"])
         for e, job in jobs.items():  # collected in submission order, so output order is unchanged
             designs[e] = job.result()
     step("engines fitted")
@@ -448,8 +451,8 @@ def main():
         engine_recs[e] = {
             "engineMaxTorque": round(num(f, "engineMaxTorque", "180") * dz["k"], 2),
             "gearCurvesPath": depot,
-            "gearChangeTime": EV["shift_time"],
-            "gearChangeCooldown": EV["shift_time"],
+            **({"gearChangeTime": EV["shift_time"], "gearChangeCooldown": EV["shift_time"]}
+               if EV["shift_time"] is not None else {}),
             "finalGearTorqueDecimationScalor": 1.0,
             "flyWheelMomentOfInertia": round(num(f, "flyWheelMomentOfInertia", "0.3") * EV["flywheel_scale"], 4),
             "resistanceTorque": round(num(f, "resistanceTorque", "100") * EV["resistance_scale"], 2),
