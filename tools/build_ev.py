@@ -55,7 +55,15 @@ SOUND = {
 # Custom torque curves
 CURVE_DIR = "base\\gameplay\\vehicles\\curves\\engine_torque\\ev_conversion"
 CURVE_STEP = 0.01   # base-speed fractions are rounded to this, so engines share curve files
-PLATFORM = "PLATFORM_Mac"  # cooking platform stamped into curve files
+# Build targets: cooking-platform stamp for our curve files, and the vanilla audio archive the
+# hybrid sound file is built from (Windows and Mac copies differ only in that stamp).
+# "pc" serves Windows and, as with other console-approved archive mods, the consoles.
+TARGETS = {
+    "mac": {"platform": "PLATFORM_Mac", "out": "EVConversion",
+            "audio": "/Applications/Cyberpunk 2077/archive/Mac/content/audio_1_general.archive"},
+    "pc": {"platform": "PLATFORM_PC", "out": "EVConversion_pc",
+           "audio": os.path.join(ROOT, "extracted", "win", "archive", "pc", "content", "audio_1_general.archive")},
+}
 # Files are stored raw in the archive (stored size == real size). The game cannot read
 # a Kraken header wrapped around uncompressed data.
 
@@ -376,7 +384,8 @@ def vanilla_bands(f, gears):
     return fwd
 
 
-def main():
+def main(target="mac"):
+    tgt = TARGETS[target]
     import time
     from concurrent.futures import ProcessPoolExecutor
     import multiprocessing as mp
@@ -475,7 +484,7 @@ def main():
                                "frictionMulLongitudinal": round(num(f, "frictionMulLongitudinal", "1") * CHASSIS["grip_factor"], 4)}
     n_brakes = sum(1 for r in chassis_recs.values() if "maxBrakingTorque" in r)
 
-    out = os.path.join(ROOT, "build", MOD_NAME)
+    out = os.path.join(ROOT, "build", tgt["out"])
     shutil.rmtree(out, ignore_errors=True)  # never ship stale files from an earlier build
     tw = os.path.join(out, "r6", "tweaks")
     os.makedirs(tw, exist_ok=True)
@@ -490,11 +499,11 @@ def main():
     os.makedirs(os.path.join(out, "archive"), exist_ok=True)
     packed = []
     for depot, pts in sorted(curve_files.items()):
-        raw = curvewriter.build(pts, platform=PLATFORM)
+        raw = curvewriter.build(pts, platform=tgt["platform"])
         packed.append((depot, raw, len(raw)))
     hybrid_audio = None
     if SOUND["hybrid"]:
-        vanilla_audio = rdar.extract(audio_hybrid.GAME_ARCHIVE, audio_hybrid.DEPOT_PATH)
+        vanilla_audio = rdar.extract(tgt["audio"], audio_hybrid.DEPOT_PATH)
         hybrid_audio, audio_report = audio_hybrid.build_hybrid(vanilla_audio)
         audio_hybrid.verify(hybrid_audio, audio_report, vanilla_audio)
         packed.append((audio_hybrid.DEPOT_PATH, hybrid_audio, len(hybrid_audio)))
@@ -541,4 +550,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1] if len(sys.argv) > 1 else "mac")
