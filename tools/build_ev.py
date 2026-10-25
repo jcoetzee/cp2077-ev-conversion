@@ -62,6 +62,11 @@ PLATFORM = "PLATFORM_Mac"  # cooking platform stamped into curve files
 CHASSIS = {
     "mass_factor": 1.10,  # battery pack (2077 cell density assumed): +10% mass, also inertia and brakes
     "com_drop_m": 0.05,   # floor-mounted pack lowers the centre of mass (cars only)
+    # The game's tyre grip is a fixed force (fitted from stopwatch times, see accel.py), so a
+    # heavier car grips less per kg and grip-limited launches get slower than vanilla. Scaling
+    # longitudinal tyre friction by the mass factor restores vanilla grip per kg, as real tyres
+    # get from the extra load. Lateral friction (cornering) is unchanged.
+    "grip_factor": 1.10,
 }
 
 import accel  # noqa: E402
@@ -369,12 +374,6 @@ def vanilla_bands(f, gears):
     return fwd
 
 
-def engine_time(f, gears, bands, torque, mass, shift_time, G):
-    curve = f.get("gearCurvesPath", "small_torquey_na").split("\\")[-1].replace(".curveset", "")
-    return accel.time_to(accel.TARGET_MS, bands, torque, mass, curve,
-                         num(f, "minRPM", "800"), num(f, "maxRPM", "5000"), shift_time, G)
-
-
 def main():
     import time
     from concurrent.futures import ProcessPoolExecutor
@@ -413,15 +412,8 @@ def main():
         if e in engines and d in drives:
             vehicles[v] = (e, d)
 
-    # Global G from the reference car (player's starting Hella), vanilla
-    ref_e, ref_d = vehicles["v_standard2_archer_hella_player"]
-    _, rf, rg = engines[ref_e]
-    ref_mass = num(drives[ref_d][1], "total_mass", "1300")
-    ref_shift = num(rf, "gearChangeTime", "0.3")
-    G = accel.solve(
-        lambda g: engine_time(rf, rg, vanilla_bands(rf, rg), num(rf, "engineMaxTorque", "180"),
-                              ref_mass, ref_shift, g),
-        1e-3, 1e3, accel.REFERENCE_SECONDS)
+    # Model constants fitted to in-game stopwatch times (see accel.py, tools/calibrate.py)
+    G = accel.G
 
     # Per engine: single gear + custom curve, fitted to vanilla 0-100 and top-end pull
     users = {}
@@ -434,13 +426,16 @@ def main():
         for e, (lbl, f, g) in engines.items():
             curve = f.get("gearCurvesPath", "small_torquey_na").split("\\")[-1].replace(".curveset", "")
             masses = sorted({num(drives[d][1], "total_mass", "1300") for _v, d in users.get(e, [])}) or [1500.0]
+            flywheel = num(f, "flyWheelMomentOfInertia", "0.3")
             jobs[e] = pool.submit(
                 ev_single.design,
                 curve, vanilla_bands(f, g), num(f, "engineMaxTorque", "180"),
                 num(f, "minRPM", "800"), num(f, "maxRPM", "5000"), num(f, "gearChangeTime", "0.3"),
                 masses, CHASSIS["mass_factor"],
                 EV["shift_time"] if EV["shift_time"] is not None else num(f, "gearChangeTime", "0.3"),
-                G, rpm_cap=SOUND["rpm_cap"], launch_speed=EV["launch_gear_speed"])
+                G, rpm_cap=SOUND["rpm_cap"], launch_speed=EV["launch_gear_speed"],
+                van_flywheel=flywheel, ev_flywheel=round(flywheel * EV["flywheel_scale"], 4),
+                grip_factor=CHASSIS["grip_factor"])
         for e, job in jobs.items():  # collected in submission order, so output order is unchanged
             designs[e] = job.result()
     step("engines fitted")
@@ -452,8 +447,10 @@ def main():
     for e, (lbl, f, g) in engines.items():
         dz = designs[e]
         key = round(dz["xb"] / CURVE_STEP) * CURVE_STEP
-        depot = f"{CURVE_DIR}\\ev_{cap_tag}_xb{round(key * 1000):04d}.curveset"
-        curve_files[depot] = ev_single.ev_curve(key, SOUND["rpm_cap"])
+        pkey = round(dz["p"] / CURVE_STEP) * CURVE_STEP
+        ptag = "" if pkey < 1.0 + CURVE_STEP / 2 else f"_p{round(pkey * 100):03d}"
+        depot = f"{CURVE_DIR}\\ev_{cap_tag}_xb{round(key * 1000):04d}{ptag}.curveset"
+        curve_files[depot] = ev_single.ev_curve(key, SOUND["rpm_cap"], pkey)
         engine_recs[e] = {
             "engineMaxTorque": round(num(f, "engineMaxTorque", "180") * dz["k"], 2),
             "gearCurvesPath": depot,
@@ -472,7 +469,8 @@ def main():
     step(f"found {len(wheel_presets)} wheel preset records")
     for c, _lbl, f in wheel_presets:
         if "maxBrakingTorque" in f:
-            chassis_recs[c] = {"maxBrakingTorque": round(num(f, "maxBrakingTorque", "0") * CHASSIS["mass_factor"], 1)}
+            chassis_recs[c] = {"maxBrakingTorque": round(num(f, "maxBrakingTorque", "0") * CHASSIS["mass_factor"], 1),
+                               "frictionMulLongitudinal": round(num(f, "frictionMulLongitudinal", "1") * CHASSIS["grip_factor"], 4)}
     n_brakes = sum(1 for r in chassis_recs.values() if "maxBrakingTorque" in r)
 
     out = os.path.join(ROOT, "build", MOD_NAME)
@@ -515,7 +513,7 @@ def main():
                   f"({accel.TARGET_MS:.2f} game units)  grip limit {accel.A_MAX} units/s^2  mass x{CHASSIS['mass_factor']}\n\n")
         for e, (lbl, f, g) in sorted(engines.items()):
             dz = designs[e]
-            rpt.write(f"{lbl}\n  -> Vehicle.{e}  torque x{dz['k']:.3f}  base speed {dz['xb']:.0%} of "
+            rpt.write(f"{lbl}\n  -> Vehicle.{e}  torque x{dz['k']:.3f}  base speed {dz['xb']:.0%} p {dz['p']:.2f} of "
                       f"{dz['vmax']:.1f} m/s  curve {engine_recs[e]['gearCurvesPath'].split(chr(92))[-1]}\n")
             for m, tv, te, tvh, teh in dz["timing"]:
                 rpt.write(f"     mass {m:6.0f}: 0-100 vanilla {tv:5.2f}s EV {te:5.2f}s | "

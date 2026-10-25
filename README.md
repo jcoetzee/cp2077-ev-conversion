@@ -28,7 +28,7 @@ Tweak records (`r6/tweaks/`), applied to every compiled record of each kind:
 | Engine (`VehicleEngineData`) | `gears` | Reverse kept; forward gears replaced by a 0-3 m/s launch gear and a main gear to vanilla top speed, idle to redline with continuous RPM | 81 |
 | | `gearChangeTime`, `gearChangeCooldown` | 0.01 s (launch-gear change and reverse; vanilla 0.2-0.4 s would leave a drive gap at 3 m/s) | 81 |
 | | `gearCurvesPath` | Points to an EV torque curve in the mod archive | 81 |
-| | `engineMaxTorque` | Scaled per engine by the 0-100 calibration (x0.69 to x2.08, median x1.02) | 81 |
+| | `engineMaxTorque` | Scaled per engine by the 0-100 calibration (x0.23 to x2.08, median x0.74) | 81 |
 | | `finalGearTorqueDecimationScalor` | 1.0 (vanilla cuts top-gear torque; with one gear that cut would apply at every speed) | 81 |
 | | `flyWheelMomentOfInertia` | x0.5 | 81 |
 | | `resistanceTorque` | x1.5 | 81 |
@@ -37,15 +37,16 @@ Tweak records (`r6/tweaks/`), applied to every compiled record of each kind:
 | | `center_of_mass_offset` | z lowered 5 cm (cars only) | 108 |
 | | `handbrakeBrakingTorque` | x1.10 | 117 |
 | Wheel preset (front/back) | `maxBrakingTorque` | x1.10 | 230 |
+| | `frictionMulLongitudinal` | x1.10 (the game's grip is a fixed force; this keeps grip per kg at vanilla for launches and braking) | 230 |
 
 Archive files (`archive/EVConversion.archive`):
 
 | File | Change |
 |---|---|
-| `base\gameplay\vehicles\curves\engine_torque\ev_conversion\*.curveset` | New: 22 EV torque curves, shared between engines |
+| `base\gameplay\vehicles\curves\engine_torque\ev_conversion\*.curveset` | New: 41 EV torque curves, shared between engines |
 | `base\sound\metadata\cooked_metadata.audio_metadata` | Replaces vanilla: 172 car and bike sound profiles get the Basilisk's engine section; gear-shift sweeteners removed |
 
-Not changed: drivetrains, top speed, tyre grip, suspension, steering, the reverse gear,
+Not changed: drivetrains, top speed, cornering grip, suspension, steering, the reverse gear,
 and every non-vehicle record.
 
 ## Status

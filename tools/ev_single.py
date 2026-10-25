@@ -18,9 +18,11 @@ import accel
 N_POINTS = 19
 
 
-def ev_curve(xb, cap=1.0):
-    """EV torque curve over normalised RPM. With cap < 1 the gear only uses RPM range
-    [0, cap], so the speed shape is squeezed into that span and held flat beyond it."""
+def ev_curve(xb, cap=1.0, p=1.0):
+    """EV torque curve over normalised RPM: flat to xb, then (xb/x)^p. p = 1 is constant
+    power; p > 1 lets power fall at high speed (as real motors do when field weakening),
+    used where vanilla loses a lot of pull up top. With cap < 1 the gear only uses RPM
+    range [0, cap], so the speed shape is squeezed into that span and held flat beyond it."""
     xb = min(max(xb, 0.02), 1.0)
     n = N_POINTS - (1 if cap < 0.999 else 0)
     if xb >= 0.999:
@@ -28,7 +30,7 @@ def ev_curve(xb, cap=1.0):
     else:
         tail = n - 2
         xs = [xb + (1.0 - xb) * ((i + 1) / tail) ** 1.3 for i in range(tail)]
-        pts = [(0.0, 1.0), (xb, 1.0)] + [(x, xb / x) for x in xs]
+        pts = [(0.0, 1.0), (xb, 1.0)] + [(x, (xb / x) ** p) for x in xs]
     if cap < 0.999:
         pts = [(x * cap, y) for x, y in pts] + [(1.0, pts[-1][1])]
     return pts
@@ -52,13 +54,14 @@ def ev_bands(vmax, min_rpm, max_rpm, rpm_cap=1.0, launch_speed=None):
 
 
 def design(curve_name, vanilla_bands, T, min_rpm, max_rpm, vanilla_shift, masses,
-           mass_factor, ev_shift, G, xb_min=0.15, k_max=3.0, high_frac=0.8, rpm_cap=1.0,
-           launch_speed=None):
+           mass_factor, ev_shift, G, xb_min=0.15, p_max=4.0, k_max=3.0, high_frac=0.8, rpm_cap=1.0,
+           launch_speed=None, van_flywheel=0.0, ev_flywheel=0.0, grip_factor=1.0):
     """Returns dict(k, xb, curve, bands, timing=[(mass, t_van, t_ev, t_van_hi, t_ev_hi)]).
 
     Constraints, in priority order:
       1. 0-100 km/h (speedometer) equals vanilla: solved exactly for k.
-      2. 0 -> high_frac * top speed equals vanilla: best effort via xb in [xb_min, 1].
+      2. 0 -> high_frac * top speed equals vanilla: via xb in [xb_min, 1]; if the EV is still
+         too quick at xb_min, the curve tail is steepened (p > 1, up to p_max).
     The EV simulation includes the launch-gear change and its ev_shift drive gap.
     """
     vmax = vanilla_bands[-1]["maxSpeed"]
@@ -68,20 +71,31 @@ def design(curve_name, vanilla_bands, T, min_rpm, max_rpm, vanilla_shift, masses
 
     def t_van(m, target):
         return accel.time_to(target, vanilla_bands, T, m, curve_name, min_rpm, max_rpm,
-                             vanilla_shift, G)
+                             vanilla_shift, G, inertia=accel.INERTIA * van_flywheel)
 
-    def t_ev(k, xb, m, target):
-        return accel.time_to(target, bands, T * k, m * mass_factor, ev_curve(xb, rpm_cap),
-                             min_rpm, max_rpm, ev_shift, G)
+    def t_ev(k, xb, m, target, p=1.0):
+        return accel.time_to(target, bands, T * k, m * mass_factor, ev_curve(xb, rpm_cap, p),
+                             min_rpm, max_rpm, ev_shift, G, inertia=accel.INERTIA * ev_flywheel,
+                             a_max=accel.A_MAX * grip_factor / mass_factor)
 
-    def k_for(xb, m):
-        return accel.solve(lambda kk: t_ev(kk, xb, m, accel.TARGET_MS), 0.1, k_max, t_van(m, accel.TARGET_MS))
+    def k_for(xb, m, p=1.0):
+        return accel.solve(lambda kk: t_ev(kk, xb, m, accel.TARGET_MS, p), 0.1, k_max, t_van(m, accel.TARGET_MS))
 
     goal_hi = t_van(m_ref, v_hi)
     # t_ev_hi decreases as xb rises (more power above base speed); bisect on xb
+    p = 1.0
     lo, hi = xb_min, 1.0
     if t_ev(k_for(lo, m_ref), lo, m_ref, v_hi) <= goal_hi:
         xb = lo
+        # still too quick up top at the lowest base speed: steepen the tail (bisect on p)
+        plo, phi = 1.0, p_max
+        for _ in range(25):
+            pm = (plo + phi) / 2
+            if t_ev(k_for(xb, m_ref, pm), xb, m_ref, v_hi, pm) < goal_hi:
+                plo = pm
+            else:
+                phi = pm
+        p = (plo + phi) / 2
     elif t_ev(k_for(hi, m_ref), hi, m_ref, v_hi) >= goal_hi:
         xb = hi
     else:
@@ -92,10 +106,10 @@ def design(curve_name, vanilla_bands, T, min_rpm, max_rpm, vanilla_shift, masses
             else:
                 hi = mid
         xb = (lo + hi) / 2
-    ks = sorted(k_for(xb, m) for m in masses)
+    ks = sorted(k_for(xb, m, p) for m in masses)
     # Shared engines: one torque value for vehicles of different mass. The midpoint of the
     # extremes balances the error between the lightest and heaviest user (minimax).
     k = (ks[0] + ks[-1]) / 2
-    timing = [(m, t_van(m, accel.TARGET_MS), t_ev(k, xb, m, accel.TARGET_MS),
-               t_van(m, v_hi), t_ev(k, xb, m, v_hi)) for m in masses]
-    return dict(k=k, xb=xb, curve=ev_curve(xb, rpm_cap), bands=bands, vmax=vmax, timing=timing)
+    timing = [(m, t_van(m, accel.TARGET_MS), t_ev(k, xb, m, accel.TARGET_MS, p),
+               t_van(m, v_hi), t_ev(k, xb, m, v_hi, p)) for m in masses]
+    return dict(k=k, xb=xb, p=p, curve=ev_curve(xb, rpm_cap, p), bands=bands, vmax=vmax, timing=timing)

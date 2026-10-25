@@ -58,14 +58,19 @@ _SPEEDO = []
 TARGET_KMH_SPEEDO = 100.0
 TARGET_MS = units_for_shown_kmh(TARGET_KMH_SPEEDO)  # name kept for callers: game units
 
-# Measured in-game (vanilla, full restart, 3 runs each, stopwatch to 62 mph shown):
-#   Archer Hella EC-D I360        8.69, 8.46, 8.95 s  (mean 8.70)
-#   Quadra Sport R-7 "Vigilante"  4.34, 4.29, 4.34 s  (mean 4.32)
-# G is set from the Hella. Without a grip limit the model then gives the R-7 3.04 s, so a
-# tyre-grip cap on acceleration (same for every car: grip scales with weight) is fitted to
-# the R-7. Two measurements fix both values, so this fit is not yet independently checked.
-REFERENCE_SECONDS = 8.70
-A_MAX = 5.536  # game units/s^2
+# Fitted by tools/calibrate.py to in-game stopwatch times (0 -> 62 mph shown, full restart,
+# 3 runs each):
+#   Archer Hella EC-D I360        vanilla 8.69 8.46 8.95 (8.70)   EV build 04e9af7 7.08 6.97 6.94 (7.00)
+#   Quadra Sport R-7 "Vigilante"  vanilla 4.34 4.29 4.34 (4.32)   EV build 04e9af7 4.22 4.13 4.22 (4.19)
+# Three constants are fitted to the first three of those four means; the fourth (R-7 EV) is
+# the check: the model gives 4.20 s.
+#   G          torque units -> acceleration
+#   A_MAX      tyre-grip limit on acceleration at vanilla mass; grip is a fixed force, so a
+#              vehicle carrying mass_factor more weight is limited to A_MAX / mass_factor
+#   INERTIA    engine inertia load per unit of flyWheelMomentOfInertia (see time_to)
+G = 30.078
+A_MAX = 5.543       # game units/s^2
+INERTIA = 152.08
 
 _CURVES = {}
 
@@ -87,10 +92,15 @@ def interp(pts, x):
 
 
 def time_to(target, bands, torque, mass, curve, min_rpm, max_rpm, shift_time, G, dt=0.002,
-            a_max=None):
+            a_max=None, inertia=0.0, upshift=1.0):
     """Seconds from standstill to `target` m/s. bands: forward gear dicts.
     curve: curve name, or a list of (x, y) points. a_max: optional tyre-grip limit on
-    acceleration (game units/s^2); grip scales with weight, so it does not depend on mass."""
+    acceleration (game units/s^2); grip scales with weight, so it does not depend on mass.
+    inertia: drivetrain (flywheel) inertia coefficient. Spinning the engine up adds
+    inertia x (dRPM/dspeed of the band / 100)^2 to the mass being accelerated, so short
+    gears (steep RPM rise) carry a large hidden load and the EV's long gear carries little.
+    upshift: where in the overlap with the next gear the gearbox changes up
+    (1.0 = at this gear's maxSpeed, 0.0 = at the next gear's minSpeed)."""
     if a_max is None:
         a_max = A_MAX
     pts = curve if isinstance(curve, list) else curve_points(curve)
@@ -99,7 +109,10 @@ def time_to(target, bands, torque, mass, curve, min_rpm, max_rpm, shift_time, G,
         if t > 120:
             return float("inf")
         b = bands[idx]
-        if v >= b["maxSpeed"] and idx + 1 < len(bands):
+        if idx + 1 < len(bands):
+            nxt = bands[idx + 1]["minSpeed"]
+            shift_at = nxt + upshift * (b["maxSpeed"] - nxt) if nxt < b["maxSpeed"] else b["maxSpeed"]
+        if idx + 1 < len(bands) and v >= shift_at:
             idx += 1
             gap = shift_time
             continue
@@ -111,7 +124,9 @@ def time_to(target, bands, torque, mass, curve, min_rpm, max_rpm, shift_time, G,
         frac = min(max((v - b["minSpeed"]) / span, 0.0), 1.0)
         rpm = b["minEngineRPM"] + frac * (b["maxEngineRPM"] - b["minEngineRPM"])
         x = (rpm - min_rpm) / max(max_rpm - min_rpm, 1.0)
-        v += min(G * torque * interp(pts, x) * b["torqueMultiplier"] / mass, a_max) * dt
+        slope = (b["maxEngineRPM"] - b["minEngineRPM"]) / span / 100.0
+        m_eff = mass + inertia * slope * slope
+        v += min(G * torque * interp(pts, x) * b["torqueMultiplier"] / m_eff, a_max) * dt
         t += dt
     return t
 
