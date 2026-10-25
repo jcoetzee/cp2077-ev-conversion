@@ -25,3 +25,6 @@ tools/ooz_port/*.dylib
 __pycache__/
 *.pyc
 .DS_Store
+
+# Packaged uploads
+dist/

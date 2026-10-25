@@ -76,6 +76,8 @@ import ev_single  # noqa: E402
 import rdar  # noqa: E402
 
 MOD_NAME = "EVConversion"
+MOD_ID = 6480290  # mod.io: https://mod.io/g/cyberpunk-2077/m/ev-conversion
+VERSION = "0.1.0"
 
 
 def load_records(package="Vehicle"):
@@ -481,7 +483,7 @@ def main():
                                   (f"{MOD_NAME}_Chassis", chassis_recs, "chassis")]:
         open(os.path.join(tw, f"{stem}.yaml"), "w").write(to_yaml(recs_out, title))
         open(os.path.join(tw, f"{stem}.json"), "w").write(to_json(recs_out) + "\n")
-    about = {"ModInfo": {"ModName": MOD_NAME, "ModID": -1}}
+    about = {"ModInfo": {"ModName": MOD_NAME, "ModID": MOD_ID}}
     open(os.path.join(out, "about.json"), "w").write(json.dumps(about, indent="\t") + "\n")
 
     # Torque curves: cooked CurveSet files packed into one archive
