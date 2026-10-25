@@ -26,9 +26,9 @@ Tweak records (`r6/tweaks/`), applied to every compiled record of each kind:
 | Record | Field | Change | Records |
 |---|---|---|---|
 | Engine (`VehicleEngineData`) | `gears` | Reverse kept; forward gears replaced by a 0-3 m/s launch gear and a main gear to vanilla top speed, idle to redline with continuous RPM | 81 |
-| | `gearChangeTime`, `gearChangeCooldown` | 0.05 s (launch-gear change and reverse; vanilla 0.2-0.4 s would leave a drive gap at 3 m/s) | 81 |
+| | `gearChangeTime`, `gearChangeCooldown` | 0.01 s (launch-gear change and reverse; vanilla 0.2-0.4 s would leave a drive gap at 3 m/s) | 81 |
 | | `gearCurvesPath` | Points to an EV torque curve in the mod archive | 81 |
-| | `engineMaxTorque` | Scaled per engine by the 0-100 calibration (x0.70 to x2.09, median x1.04) | 81 |
+| | `engineMaxTorque` | Scaled per engine by the 0-100 calibration (x0.69 to x2.08, median x1.02) | 81 |
 | | `finalGearTorqueDecimationScalor` | 1.0 (vanilla cuts top-gear torque; with one gear that cut would apply at every speed) | 81 |
 | | `flyWheelMomentOfInertia` | x0.5 | 81 |
 | | `resistanceTorque` | x1.5 | 81 |
@@ -116,7 +116,7 @@ Findings from reverse engineering, for anyone extending the tools:
   (`r6/cache/*.redscripts`) differ per platform.
 - TweakDB records are compiled as independent copies: overriding a parent preset does not
   change records that inherit from it. Inline records are named `<record>_inline<N>`.
-- `gearChangeTime = 0` stops the engine from engaging (revs, no drive). 0.05 s works.
+- `gearChangeTime = 0` stops the engine from engaging (revs, no drive). 0.01 s and 0.05 s work.
 - CR2W name-table hash: FNV-1a 64 folded to 32 bits (high ^ low); empty name = 0.
   Header CRC: CRC-32 of the first 160 bytes with the CRC field set to `0xDEADBEEF`.
 - Archive index CRC: CRC-64/XZ over the counts, file entries and segments. Alignment

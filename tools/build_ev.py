@@ -30,10 +30,11 @@ import curveset  # noqa: E402
 EV = {
     "flywheel_scale": 0.5,   # x vanilla flyWheelMomentOfInertia
     "resistance_scale": 1.5,  # x vanilla resistanceTorque (lift-off regen feel)
-    # gearChangeTime/gearChangeCooldown override. None keeps each engine's vanilla values:
-    # with a single forward gear they only apply to reverse <-> forward changes.
-    # Never use 0: the engine then revs but never drives (found in-game). 0.05 s worked.
-    "shift_time": 0.05,
+    # gearChangeTime/gearChangeCooldown override (None keeps each engine's vanilla values).
+    # Applies to the launch-gear change and to reverse <-> forward. Vanilla 0.2-0.4 s leaves
+    # a drive gap at the launch gear. Never use 0: the engine revs but never drives.
+    # 0.01 s tested in-game: drives, brakes to a stop and reverses (0.05 s also worked).
+    "shift_time": 0.01,
     # Short first gear (m/s). Required: with a single forward gear down to 0 the game cannot
     # switch from braking to reverse, and holding brake hovers at ~11 mph (found in-game,
     # fixed by a 3 m/s launch gear). RPM is continuous across it, and the hybrid sound
