@@ -440,21 +440,10 @@ def main(target="mac"):
     if ice["conflicts"]:
         sys.exit(f"ICE exclusion conflicts: {ice['conflicts']}")
     step(f"{len(ice['vehicles'])} vehicles stay ICE: {len(ice['engines'])} engines, "
-         f"{len(ice['drive_models'])} drive models, {len(ice['wheels'])} wheel presets, "
+         f"{len(ice["drive_models"])} drive models, {len(ice["wheels"])} wheel presets, "
          f"{len(ice['sounds'])} sound profiles kept vanilla")
     engines = {e: v for e, v in engines.items() if e not in ice["engines"]}
     vehicles = {v: ed for v, ed in vehicles.items() if v not in ice["vehicles"]}
-    # Engine records shared with an ICE vehicle: converted users get a new copy of the record
-    # ($base = vanilla record) and their vehEngineData is pointed at it.
-    split_engines, repoint = {}, {}
-    all_engines, _d, _v = discover(recs, tdb)
-    for e, users_of in ice["engine_splits"].items():
-        new = f"{MOD_NAME}_{e}"
-        engines[new] = all_engines[e]
-        split_engines[new] = e
-        for v in users_of:
-            vehicles[v] = (new, vehicles[v][1])
-            repoint[v] = new
 
     # Model constants fitted to in-game stopwatch times (see accel.py, tools/calibrate.py)
     G = accel.G
@@ -496,7 +485,6 @@ def main(target="mac"):
         depot = f"{CURVE_DIR}\\ev_{cap_tag}_xb{round(key * 1000):04d}{ptag}.curveset"
         curve_files[depot] = ev_single.ev_curve(key, SOUND["rpm_cap"], pkey)
         engine_recs[e] = {
-            **({"$base": f"Vehicle.{split_engines[e]}"} if e in split_engines else {}),
             "engineMaxTorque": round(num(f, "engineMaxTorque", "180") * dz["k"], 2),
             "gearCurvesPath": depot,
             **({"gearChangeTime": EV["shift_time"], "gearChangeCooldown": EV["shift_time"]}
@@ -506,8 +494,6 @@ def main(target="mac"):
             "resistanceTorque": round(num(f, "resistanceTorque", "100") * EV["resistance_scale"], 2),
             "gears": [dict(g[0])] + [{k: float(v) for k, v in band.items()} for band in dz["bands"]],
         }
-    for v, new in repoint.items():
-        engine_recs[v] = {"vehEngineData": f"Vehicle.{new}"}
     bike_drives = {d for v, (e, d) in vehicles.items() if "bike" in v or "_2w" in d}
     chassis_recs = {d: convert_chassis(f, d in bike_drives or "2w" in d) for d, (lbl, f) in drives.items()
                     if d not in ice["drive_models"]}

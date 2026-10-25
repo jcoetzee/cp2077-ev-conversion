@@ -12,6 +12,9 @@ has Night City running on CHOOH2 combustion; the mod electrifies the city and le
 Badlands rigs and Johnny's classic as they are. The list lives in `tools/ice_exclusions.py`
 (base models plus every scripted, quest and police-heat variant that uses the same engine and
 chassis). Excluded vehicles keep their vanilla engine, chassis, brakes, grip and sound.
+One exception: Galena "The Rat" (a quest car) has the Rattler's engine on the city Galena GT
+chassis. Its engine and sound stay vanilla, but the shared chassis carries the EV changes, so it
+is up to ~10% slower than vanilla. Untested in-game until the quest is reached.
 
 ## What the mod changes
 
@@ -44,14 +47,13 @@ Tweak records (`r6/tweaks/`), applied to every compiled record of each kind:
 | | `handbrakeBrakingTorque` | x1.10 | 105 |
 | Wheel preset (front/back) | `maxBrakingTorque` | x1.10 | 208 |
 | | `frictionMulLongitudinal` | x1.10 (the game's grip is a fixed force; this keeps grip per kg at vanilla for launches and braking) | 208 |
-| Vehicle `v_standard2_thorton_galena_ncu` (Galena "The Rat") | `vehEngineData` | Points to a new converted copy of its engine record; it shared its engine with the ICE Galena "Rattler" | 1 |
 
 Archive files (`archive/EVConversion.archive`):
 
 | File | Change |
 |---|---|
 | `base\gameplay\vehicles\curves\engine_torque\ev_conversion\*.curveset` | New: 37 EV torque curves, shared between engines |
-| `base\sound\metadata\cooked_metadata.audio_metadata` | Replaces vanilla: 153 car and bike sound profiles (all except the 19 ICE ones) get the Basilisk's engine section; gear-shift sweeteners removed |
+| `base\sound\metadata\cooked_metadata.audio_metadata` | Replaces vanilla: 151 car and bike sound profiles (all except the 21 ICE ones) get the Basilisk's engine section; gear-shift sweeteners removed |
 
 Not changed: drivetrains, top speed, cornering grip, suspension, steering, the reverse gear,
 and every non-vehicle record.

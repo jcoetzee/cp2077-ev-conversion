@@ -33,6 +33,15 @@ ICE_BASE_MODELS = [
 # Not excluded: the Brennan Apollo nomad bike uses the same engine, chassis and sound records
 # as every other Apollo, so it cannot differ from them without new records.
 
+# ICE vehicles whose chassis (drive model and wheel presets) is shared with vehicles that stay
+# electric. Their engine and sound stay vanilla; the shared chassis keeps the EV changes
+# (+10% mass, brakes and longitudinal grip +10%), so they accelerate up to ~10% slower than
+# vanilla. Making them fully vanilla needs cloned chassis records: not done until tested.
+ICE_SHARED_CHASSIS = {
+    # Galena "The Rat" (quest car): the Rattler's engine on the city Galena GT chassis
+    "v_standard2_thorton_galena_ncu",
+}
+
 
 def _wheel_presets_by_owner(b, recs, tdb):
     """{drive model record (compiled name) or inline owner: [compiled wheel preset names]}."""
@@ -57,6 +66,10 @@ def analyse(b, recs, tdb, vehicles, drives):
     # ICE: the base models, vehicles inheriting from them, and scripted/quest/heat variants
     # that use exactly the same engine and drive model as a base model.
     ice = {v for v, ed in vehicles.items() if ed in seed_pairs or bases & set(b.chain_of(recs, v))}
+    unknown = ICE_SHARED_CHASSIS - set(vehicles)
+    if unknown:
+        raise ValueError(f"ICE_SHARED_CHASSIS vehicles not found: {sorted(unknown)}")
+    ice |= ICE_SHARED_CHASSIS
     ev = set(vehicles) - ice
 
     def users(index):
@@ -68,7 +81,7 @@ def analyse(b, recs, tdb, vehicles, drives):
     eng_users = users(lambda e, d: e)
     drv_users = users(lambda e, d: d)
     engines = {vehicles[v][0] for v in ice}
-    drive_models = {vehicles[v][1] for v in ice}
+    drive_models = {vehicles[v][1] for v in ice - ICE_SHARED_CHASSIS}
 
     # wheel presets hang off a drive model: inline ones are named <owner>_inlineN, where the
     # owner is the record declaring the drive model; named ones are referenced by name
@@ -101,20 +114,16 @@ def analyse(b, recs, tdb, vehicles, drives):
                 if v in ice:
                     sounds.add(s)
 
-    conflicts, engine_splits = [], {}
+    conflicts = []
     for kind, keep, use in (("engine", engines, eng_users), ("drive model", drive_models, drv_users),
                             ("wheel preset", wheels, wheel_users), ("sound profile", sounds, sound_users)):
         for r in sorted(keep):
             shared = sorted(use.get(r, set()) & ev)
-            if not shared:
-                continue
-            if kind == "engine":
-                # resolvable: converted users get their own copy of the engine record
-                engine_splits[r] = shared
-            else:
+            if shared:
                 conflicts.append((kind, r, shared))
     return dict(vehicles=sorted(ice), engines=engines, drive_models=drive_models,
-                wheels=wheels, sounds=sounds, conflicts=conflicts, engine_splits=engine_splits)
+                wheels=wheels, sounds=sounds, conflicts=conflicts,
+                shared_chassis=sorted(ICE_SHARED_CHASSIS))
 
 
 def main():
@@ -131,9 +140,7 @@ def main():
     print(f"conflicts (also used by converted vehicles): {len(a['conflicts'])}")
     for kind, r, shared in a["conflicts"]:
         print(f"  {kind} {r}: shared with {shared[:6]}{' ...' if len(shared) > 6 else ''}")
-    print(f"engine records split (converted users get their own copy): {len(a['engine_splits'])}")
-    for r, shared in a["engine_splits"].items():
-        print(f"  {r}: {shared}")
+    print(f"ICE with shared EV chassis (engine and sound vanilla): {a['shared_chassis']}")
 
 
 if __name__ == "__main__":
