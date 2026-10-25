@@ -11,7 +11,7 @@ advantage.
 
 | Area | Change |
 |---|---|
-| Gearbox | One forward gear from standstill to vanilla top speed. No shifts. Reverse and shift timings stay vanilla. |
+| Gearbox | A 0-3 m/s launch gear plus one main gear to vanilla top speed. RPM is continuous across the change and there is no shift sound. The launch gear is needed: with a single forward gear the game cannot switch from braking to reverse. |
 | Torque | Custom torque curve per engine: flat to a base speed, then constant power (falls with 1/speed). |
 | Calibration | Engine torque is scaled so 0-100 km/h (speedometer) and 0-80% of top speed match vanilla. |
 | Response | Flywheel inertia halved; lift-off resistance x1.5 (regen-like). |
@@ -25,9 +25,10 @@ Tweak records (`r6/tweaks/`), applied to every compiled record of each kind:
 
 | Record | Field | Change | Records |
 |---|---|---|---|
-| Engine (`VehicleEngineData`) | `gears` | Reverse kept; forward gears replaced by one gear: 0 to vanilla top speed, idle to redline | 81 |
+| Engine (`VehicleEngineData`) | `gears` | Reverse kept; forward gears replaced by a 0-3 m/s launch gear and a main gear to vanilla top speed, idle to redline with continuous RPM | 81 |
+| | `gearChangeTime`, `gearChangeCooldown` | 0.05 s (launch-gear change and reverse; vanilla 0.2-0.4 s would leave a drive gap at 3 m/s) | 81 |
 | | `gearCurvesPath` | Points to an EV torque curve in the mod archive | 81 |
-| | `engineMaxTorque` | Scaled per engine by the 0-100 calibration (x0.69 to x2.07, median x1.02) | 81 |
+| | `engineMaxTorque` | Scaled per engine by the 0-100 calibration (x0.70 to x2.09, median x1.04) | 81 |
 | | `finalGearTorqueDecimationScalor` | 1.0 (vanilla cuts top-gear torque; with one gear that cut would apply at every speed) | 81 |
 | | `flyWheelMomentOfInertia` | x0.5 | 81 |
 | | `resistanceTorque` | x1.5 | 81 |
@@ -44,12 +45,16 @@ Archive files (`archive/EVConversion.archive`):
 | `base\gameplay\vehicles\curves\engine_torque\ev_conversion\*.curveset` | New: 22 EV torque curves, shared between engines |
 | `base\sound\metadata\cooked_metadata.audio_metadata` | Replaces vanilla: 172 car and bike sound profiles get the Basilisk's engine section; gear-shift sweeteners removed |
 
-Not changed: drivetrains, top speed, tyre grip, suspension, steering, gear shift and reverse
-timings, and every non-vehicle record.
+Not changed: drivetrains, top speed, tyre grip, suspension, steering, the reverse gear,
+and every non-vehicle record.
 
 ## Status
 
 Tested on the macOS build (GOG, Update 2.5).
+
+**Restart the game after enabling or disabling the mod.** The tweaks and the archive only
+take effect together after a full restart. If only one of them is active (for example, after
+toggling the mod from the main menu), cars either do not move or cannot stop.
 
 - Engines, chassis and brakes: working in-game.
 - Custom torque curves: working. Curve files must be stored raw in the archive (stored size ==

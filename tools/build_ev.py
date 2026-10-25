@@ -33,7 +33,12 @@ EV = {
     # gearChangeTime/gearChangeCooldown override. None keeps each engine's vanilla values:
     # with a single forward gear they only apply to reverse <-> forward changes.
     # Never use 0: the engine then revs but never drives (found in-game). 0.05 s worked.
-    "shift_time": None,
+    "shift_time": 0.05,
+    # Short first gear (m/s). Required: with a single forward gear down to 0 the game cannot
+    # switch from braking to reverse, and holding brake hovers at ~11 mph (found in-game,
+    # fixed by a 3 m/s launch gear). RPM is continuous across it, and the hybrid sound
+    # profiles have no gear-shift events, so the change is silent. Calibration includes it.
+    "launch_gear_speed": 3.0,
 }
 
 SOUND = {
@@ -434,7 +439,7 @@ def main():
                 num(f, "minRPM", "800"), num(f, "maxRPM", "5000"), num(f, "gearChangeTime", "0.3"),
                 masses, CHASSIS["mass_factor"],
                 EV["shift_time"] if EV["shift_time"] is not None else num(f, "gearChangeTime", "0.3"),
-                G, rpm_cap=SOUND["rpm_cap"])
+                G, rpm_cap=SOUND["rpm_cap"], launch_speed=EV["launch_gear_speed"])
         for e, job in jobs.items():  # collected in submission order, so output order is unchanged
             designs[e] = job.result()
     step("engines fitted")
@@ -456,7 +461,7 @@ def main():
             "finalGearTorqueDecimationScalor": 1.0,
             "flyWheelMomentOfInertia": round(num(f, "flyWheelMomentOfInertia", "0.3") * EV["flywheel_scale"], 4),
             "resistanceTorque": round(num(f, "resistanceTorque", "100") * EV["resistance_scale"], 2),
-            "gears": [dict(g[0]), {k: float(v) for k, v in dz["band"].items()}],
+            "gears": [dict(g[0])] + [{k: float(v) for k, v in band.items()} for band in dz["bands"]],
         }
     bike_drives = {d for v, (e, d) in vehicles.items() if "bike" in v or "_2w" in d}
     chassis_recs = {d: convert_chassis(f, d in bike_drives or "2w" in d) for d, (lbl, f) in drives.items()}

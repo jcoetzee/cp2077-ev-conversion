@@ -34,17 +34,35 @@ def ev_curve(xb, cap=1.0):
     return pts
 
 
+def ev_bands(vmax, min_rpm, max_rpm, rpm_cap=1.0, launch_speed=None):
+    """Forward gears for the EV: RPM rises linearly with speed from min_rpm at standstill to
+    the capped redline at vmax. With launch_speed, the range is split into a short launch
+    gear (0 -> launch_speed) and a main gear, RPM continuous across the split, so torque at
+    every speed is unchanged. The game needs that short first gear: with one forward gear
+    down to 0, holding brake hovers at ~11 mph instead of stopping and reversing."""
+    top_rpm = round(min_rpm + rpm_cap * (max_rpm - min_rpm))
+    if not launch_speed or launch_speed >= vmax:
+        return [{"minSpeed": 0.0, "maxSpeed": vmax, "minEngineRPM": min_rpm,
+                 "maxEngineRPM": top_rpm, "torqueMultiplier": 1.0}]
+    split_rpm = round(min_rpm + (top_rpm - min_rpm) * launch_speed / vmax, 1)
+    return [{"minSpeed": 0.0, "maxSpeed": launch_speed, "minEngineRPM": min_rpm,
+             "maxEngineRPM": split_rpm, "torqueMultiplier": 1.0},
+            {"minSpeed": launch_speed, "maxSpeed": vmax, "minEngineRPM": split_rpm,
+             "maxEngineRPM": top_rpm, "torqueMultiplier": 1.0}]
+
+
 def design(curve_name, vanilla_bands, T, min_rpm, max_rpm, vanilla_shift, masses,
-           mass_factor, ev_shift, G, xb_min=0.15, k_max=3.0, high_frac=0.8, rpm_cap=1.0):
-    """Returns dict(k, xb, curve, band, timing=[(mass, t_van, t_ev, t_van_hi, t_ev_hi)]).
+           mass_factor, ev_shift, G, xb_min=0.15, k_max=3.0, high_frac=0.8, rpm_cap=1.0,
+           launch_speed=None):
+    """Returns dict(k, xb, curve, bands, timing=[(mass, t_van, t_ev, t_van_hi, t_ev_hi)]).
 
     Constraints, in priority order:
       1. 0-100 km/h (speedometer) equals vanilla: solved exactly for k.
       2. 0 -> high_frac * top speed equals vanilla: best effort via xb in [xb_min, 1].
+    The EV simulation includes the launch-gear change and its ev_shift drive gap.
     """
     vmax = vanilla_bands[-1]["maxSpeed"]
-    band = [{"minSpeed": 0.0, "maxSpeed": vmax, "minEngineRPM": min_rpm,
-             "maxEngineRPM": round(min_rpm + rpm_cap * (max_rpm - min_rpm)), "torqueMultiplier": 1.0}]
+    bands = ev_bands(vmax, min_rpm, max_rpm, rpm_cap, launch_speed)
     v_hi = high_frac * vmax
     m_ref = masses[len(masses) // 2]
 
@@ -53,7 +71,7 @@ def design(curve_name, vanilla_bands, T, min_rpm, max_rpm, vanilla_shift, masses
                              vanilla_shift, G)
 
     def t_ev(k, xb, m, target):
-        return accel.time_to(target, band, T * k, m * mass_factor, ev_curve(xb, rpm_cap),
+        return accel.time_to(target, bands, T * k, m * mass_factor, ev_curve(xb, rpm_cap),
                              min_rpm, max_rpm, ev_shift, G)
 
     def k_for(xb, m):
@@ -78,4 +96,4 @@ def design(curve_name, vanilla_bands, T, min_rpm, max_rpm, vanilla_shift, masses
     k = ks[len(ks) // 2]
     timing = [(m, t_van(m, accel.TARGET_MS), t_ev(k, xb, m, accel.TARGET_MS),
                t_van(m, v_hi), t_ev(k, xb, m, v_hi)) for m in masses]
-    return dict(k=k, xb=xb, curve=ev_curve(xb, rpm_cap), band=band[0], vmax=vmax, timing=timing)
+    return dict(k=k, xb=xb, curve=ev_curve(xb, rpm_cap), bands=bands, vmax=vmax, timing=timing)
