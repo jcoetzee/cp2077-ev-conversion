@@ -34,16 +34,6 @@ def ev_curve(xb, cap=1.0):
     return pts
 
 
-def vanilla_force_factor(f_curve_pts, bands, min_rpm, max_rpm, v):
-    """curve(rpm) * torqueMultiplier in the band an accelerating car is in at speed v."""
-    band = next((b for b in bands if v < b["maxSpeed"]), bands[-1])
-    span = max(band["maxSpeed"] - band["minSpeed"], 1e-6)
-    frac = min(max((v - band["minSpeed"]) / span, 0.0), 1.0)
-    rpm = band["minEngineRPM"] + frac * (band["maxEngineRPM"] - band["minEngineRPM"])
-    x = (rpm - min_rpm) / max(max_rpm - min_rpm, 1.0)
-    return accel.interp(f_curve_pts, x) * band["torqueMultiplier"]
-
-
 def design(curve_name, vanilla_bands, T, min_rpm, max_rpm, vanilla_shift, masses,
            mass_factor, ev_shift, G, xb_min=0.15, k_max=3.0, high_frac=0.8, rpm_cap=1.0):
     """Returns dict(k, xb, curve, band, timing=[(mass, t_van, t_ev, t_van_hi, t_ev_hi)]).

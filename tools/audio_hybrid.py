@@ -28,19 +28,11 @@ TARGET_PREFIXES = ("v_car_", "v_mbike_")
 # traffic profile, whose engine section starts no engine loop: NPC EVs then make only tyre,
 # road and brake noise, like real EVs at city speeds. Set TRAFFIC_DONOR to DONOR to give
 # traffic the same audible hum as the player's car.
+# The Basilisk was chosen by in-game listening; the Rayfield Caliburn was also tried and
+# rejected because its engine section keeps combustion pops and crackles.
 DONOR = "v_av_basilisk_tank"
 TRAFFIC_DONOR = "v_av_basilisk_tank_traffic"
 
-# A/B crossover: profile name prefix -> donor (player profile). Traffic profiles of the
-# same family use the donor's "_traffic" profile. Everything not listed uses DONOR.
-# Result of session 1 (Hella = Basilisk, Sport R-7 = Caliburn): the Caliburn engine keeps
-# combustion pops and crackles, so every vehicle uses the Basilisk. AB_SESSION = 0 disables
-# overrides; the families are kept for future auditions.
-AB_SESSION = 0
-AB_FAMILIES = {
-    1: {"v_car_archer_hella": "v_av_basilisk_tank", "v_car_quadra_sport_r7": "v_car_rayfield_caliburn"},
-    2: {"v_car_archer_hella": "v_car_rayfield_caliburn", "v_car_quadra_sport_r7": "v_av_basilisk_tank"},
-}
 # Engine sub-fields never copied from a donor: we have a single gear, so no shift sounds.
 STRIP_MECH_FIELDS = ("gearUpBeginEvent", "gearDownBeginEvent")
 # General-data fields naming the engine sound banks; switched to the donor's so its engine
@@ -68,13 +60,9 @@ def rebuild_chunk(c, i, props):
     return head + b"".join(_prop_bytes(c, p) for p in props) + tail
 
 
-def donor_for(name, session=None):
-    """Donor profile for a target profile: A/B family override, else the default."""
-    families = AB_FAMILIES.get(AB_SESSION if session is None else session, {})
-    player = next((d for prefix, d in families.items() if name.startswith(prefix)), DONOR)
-    if name.endswith("_traffic"):
-        return TRAFFIC_DONOR if player == DONOR else f"{player}_traffic"
-    return player
+def donor_for(name):
+    """Donor profile whose engine section a target profile receives."""
+    return TRAFFIC_DONOR if name.endswith("_traffic") else DONOR
 
 
 def _struct_bytes(c, prop, subprops):
@@ -222,7 +210,6 @@ if __name__ == "__main__":
     out, report = build_hybrid(src)
     n = verify(out, report, src)
     by_donor = collections.Counter(r[1] for r in report)
-    print(f"A/B session {AB_SESSION}: {n} profiles converted; donors: {dict(by_donor)}")
-    for r in report:
-        if r[0].startswith(tuple(AB_FAMILIES.get(AB_SESSION, {}))):
-            print(f"   {r[0]:40} <- {r[1]}")
+    print(f"{n} profiles converted; donors: {dict(by_donor)}; "
+          f"{sum(r[2] for r in report)} had gear sweeteners removed; "
+          f"size {len(src)} -> {len(out)}; platform stamp: {platform(src)}")

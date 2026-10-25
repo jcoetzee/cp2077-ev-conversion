@@ -50,7 +50,6 @@ Tested on the macOS build (GOG, Update 2.5).
 | `tools/audio_hybrid.py` | Builds the hybrid vehicle sound profiles. |
 | `tools/extract_audio_meta.py` | Extracts the vehicle audio metadata for inspection. |
 | `tools/extract_curves.py` | Extracts the vanilla engine torque curves (setup step 4). |
-| `tools/diag*_build.py` | Diagnostic builds used to isolate in-game problems (kept for reference). |
 | `tools/ooz_port/` | macOS/Apple Silicon build of the ooz Kraken decompressor (fetched at build time). |
 
 ## Setup (macOS)

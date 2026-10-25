@@ -104,13 +104,6 @@ def crc64_xz(data: bytes) -> int:
     return crc ^ 0xFFFFFFFFFFFFFFFF
 
 
-def kark_stored(raw: bytes) -> bytes:
-    """Wrap data as a Kraken 'stored' (uncompressed) block, as the game expects."""
-    if len(raw) > 0x40000:
-        raise ValueError("stored block limited to 256 KiB")
-    return b"KARK" + struct.pack("<I", len(raw)) + bytes([0xCC, 0x06]) + raw
-
-
 def write_archive(path, files, timestamp=133428308453933857):
     """files: list of (depot_path, segment_bytes, uncompressed_size). One segment per file."""
     pad = lambda n: (-n) % ALIGN  # noqa: E731

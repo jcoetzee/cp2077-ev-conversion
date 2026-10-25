@@ -1,23 +1,24 @@
-"""Generate the EV conversion tweak files (YAML + JSON) from vanilla REDmod sources.
+"""Build the EV Conversion mod from vanilla game data.
 
-Test 1 scope: one engine preset, engine behaviour only (no mass/handling changes).
+Reads the vanilla REDmod tweak sources and the compiled TweakDB, and writes the mod to
+build/EVConversion/:
+  r6/tweaks/EVConversion.yaml/.json          engines (one record per compiled engine)
+  r6/tweaks/EVConversion_Chassis.yaml/.json  drive models and wheel (brake) presets
+  archive/EVConversion.archive               EV torque curves + hybrid vehicle sound profiles
 
-EV conversion of an engine preset:
-  * Forward speed bands keep vanilla speed ranges and torque multipliers, so the
-    car's force-vs-speed envelope (its character) is unchanged.
-  * Engine RPM becomes one continuous linear function of speed across all forward
-    bands, mapped onto the flat region of the preset's torque curve. No RPM drop at
-    band changes means no audible "shift" and near-constant curve torque.
-  * gearChangeTime / gearChangeCooldown = 0: no torque gap between bands.
-  * finalGearTorqueDecimationScalor -> 1.0, with the vanilla cut folded into the top
-    band's multiplier so top-end force is unchanged.
-  * Lower flywheel inertia (snappier response) and higher resistance torque
-    (regen-like lift-off deceleration).
-  * Reverse gear (index 0) untouched.
+Per engine (all cars, variants and motorcycles):
+  * One forward gear from 0 to vanilla top speed; reverse untouched.
+  * Custom EV torque curve: flat to a base speed, then constant power (see ev_single.py).
+  * engineMaxTorque scaled so 0-100 km/h (speedometer) and 0-80% of top speed match vanilla
+    at the EV's higher mass (see accel.py).
+  * Lower flywheel inertia (snappier response), higher resistance torque (regen-like lift-off).
+Per drive model / wheel preset: mass, inertia and brake torque scaled by CHASSIS mass_factor;
+centre of mass lowered on cars. Drivetrains are unchanged.
 """
 import json
 import os
 import re
+import shutil
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -26,47 +27,18 @@ TWEAKS = os.path.join(ROOT, "redmod", "tools", "redmod", "tweaks")
 sys.path.insert(0, HERE)
 import curveset  # noqa: E402
 
-# Flat (>=97% torque) windows of each curve, as fraction of the RPM range.
-# Measured from the decoded .curveset files (see curveset.py).
-FLAT_WINDOW = {
-    "large_balanced_na": (0.36, 0.84),
-    "large_balanced_sc": (0.23, 0.78),
-    "large_balanced_turbo": (0.28, 0.91),
-    "large_torquey_na": (0.22, 0.64),
-    "med_balanced_na": (0.40, 0.81),
-    "med_balanced_sc": (0.26, 0.76),
-    "med_lowcomp_bigturbo": (0.58, 0.76),
-    "med_peaky_na": (0.56, 0.88),
-    "med_torquey_na": (0.26, 0.64),
-    "med_torquey_turbo": (0.56, 0.81),
-    "small_balanced_na": (0.43, 0.80),
-    "small_peaky_na": (0.57, 0.85),
-    "small_torquey_na": (0.34, 0.63),
-    "small_torquey_turbo": (0.58, 0.76),
-}
-
 EV = {
     "flywheel_scale": 0.5,   # x vanilla flyWheelMomentOfInertia
     "resistance_scale": 1.5,  # x vanilla resistanceTorque (lift-off regen feel)
-    # Suspected cause of "revs to redline, no drive": a shift time of exactly 0 may stop
-    # the clutch re-engaging. Vanilla data never goes below 0.2 s.
+    # Must stay above 0: with exactly 0 the engine revs but never drives (found in-game).
+    # Vanilla never goes below 0.2 s. Applies to reverse <-> forward changes.
     "shift_time": 0.05,
 }
 
-# Diagnostic split: engines listed here stay vanilla. Empty = convert everything.
-TEST_KEEP_VANILLA_ENGINE = set()
-
-# Sound
 SOUND = {
     # Fraction of the vanilla idle->redline range the single gear sweeps from 0 to top
-    # speed. Below 1.0 the engine never nears redline, so there is no "about to shift" cue.
-    "rpm_cap": 1.0,  # 0.4 was too quiet over city noise; full range = vanilla volume
-    # Audition: vehicle record -> (player profile, traffic profile) to borrow.
-    # Round 1 (MaiMai, Aerondight) sounded like the cars' own engines: either the swap
-    # had no effect or the profiles are too similar. Round 2 uses unmistakable profiles.
-    # Audition: vehicle record -> (player profile, traffic profile) to borrow.
-    # Superseded by "hybrid" (below); kept empty so no vehicle borrows a whole profile.
-    "audition": {},
+    # speed. 1.0 keeps vanilla engine volume; 0.4 was too quiet over city noise.
+    "rpm_cap": 1.0,
     # Hybrid profiles (tools/audio_hybrid.py): every car/bike keeps its own sound profile
     # (brakes, tyres, horn, doors, radio) with the engine section replaced by the Basilisk's.
     # Ships as a replacement of base\sound\metadata\cooked_metadata.audio_metadata.
@@ -76,11 +48,9 @@ SOUND = {
 # Custom torque curves
 CURVE_DIR = "base\\gameplay\\vehicles\\curves\\engine_torque\\ev_conversion"
 CURVE_STEP = 0.01   # base-speed fractions are rounded to this, so engines share curve files
-PLATFORM = "PLATFORM_Mac"  # cooking platform stamped into curve files (test build: Mac)
-# How curve files are stored in the archive:
-#   "kark_stored": Kraken header + uncompressed block. Game could NOT read this (diag 2).
-#   "raw":         plain bytes, stored size == real size. Confirmed working (diag 3).
-STORAGE = "raw"
+PLATFORM = "PLATFORM_Mac"  # cooking platform stamped into curve files
+# Files are stored raw in the archive (stored size == real size). The game cannot read
+# a Kraken header wrapped around uncompressed data.
 
 CHASSIS = {
     "mass_factor": 1.10,  # battery pack (2077 cell density assumed): +10% mass, also inertia and brakes
@@ -318,40 +288,6 @@ def num(fields, key, default):
     return float(fields.get(key, default).rstrip("f"))
 
 
-def convert(f, gears):
-    curve = f.get("gearCurvesPath", "small_torquey_na").split("\\")[-1].replace(".curveset", "")
-    lo, hi = FLAT_WINDOW[curve]
-    min_rpm, max_rpm = num(f, "minRPM", "800"), num(f, "maxRPM", "5000")
-    rpm_at = lambda x: round(min_rpm + x * (max_rpm - min_rpm))  # noqa: E731
-    r_lo, r_hi = rpm_at(lo), rpm_at(hi)
-
-    fwd = gears[1:]
-    vmax = max(g["maxSpeed"] for g in fwd)
-    rpm_for_speed = lambda v: round(r_lo + (r_hi - r_lo) * v / vmax)  # noqa: E731
-
-    decim = num(f, "finalGearTorqueDecimationScalor", "1.0")
-    new_gears = [dict(gears[0])]  # reverse unchanged
-    for i, g in enumerate(fwd):
-        tm = g["torqueMultiplier"] * (decim if i == len(fwd) - 1 else 1.0)
-        new_gears.append({
-            "minSpeed": g["minSpeed"],
-            "maxSpeed": g["maxSpeed"],
-            "minEngineRPM": float(rpm_for_speed(g["minSpeed"])),
-            "maxEngineRPM": float(rpm_for_speed(g["maxSpeed"])),
-            "torqueMultiplier": round(tm, 4),
-        })
-
-    record = {
-        "gearChangeTime": EV["shift_time"],
-        "gearChangeCooldown": EV["shift_time"],
-        "finalGearTorqueDecimationScalor": 1.0,
-        "flyWheelMomentOfInertia": round(num(f, "flyWheelMomentOfInertia", "0.3") * EV["flywheel_scale"], 4),
-        "resistanceTorque": round(num(f, "resistanceTorque", "100") * EV["resistance_scale"], 2),
-        "gears": new_gears,
-    }
-    report = dict(curve=curve, flat=(lo, hi), rpm=(r_lo, r_hi), vanilla=gears, fields=f)
-    return record, report
-
 
 def fmt(v):
     s = f"{v:.4f}".rstrip("0").rstrip(".")
@@ -417,11 +353,6 @@ def convert_chassis(f, is_bike):
     if com and not is_bike:
         rec["center_of_mass_offset"] = {**com, "z": round(com["z"] - CHASSIS["com_drop_m"], 3)}
     return rec
-
-
-def ev_bands(f, gears):
-    rec, _ = convert(f, gears)
-    return rec["gears"][1:]
 
 
 def vanilla_bands(f, gears):
@@ -494,8 +425,6 @@ def main():
     step(f"fitting {len(engines)} engines on {workers} processes")
     with ProcessPoolExecutor(workers, mp_context=mp.get_context("spawn")) as pool:
         for e, (lbl, f, g) in engines.items():
-            if e in TEST_KEEP_VANILLA_ENGINE:
-                continue
             curve = f.get("gearCurvesPath", "small_torquey_na").split("\\")[-1].replace(".curveset", "")
             masses = sorted({num(drives[d][1], "total_mass", "1300") for _v, d in users.get(e, [])}) or [1500.0]
             jobs[e] = pool.submit(
@@ -512,8 +441,6 @@ def main():
     engine_recs = {}
     cap_tag = f"c{round(SOUND['rpm_cap'] * 100):03d}"
     for e, (lbl, f, g) in engines.items():
-        if e not in designs:
-            continue
         dz = designs[e]
         key = round(dz["xb"] / CURVE_STEP) * CURVE_STEP
         depot = f"{CURVE_DIR}\\ev_{cap_tag}_xb{round(key * 1000):04d}.curveset"
@@ -540,17 +467,11 @@ def main():
     n_brakes = sum(1 for r in chassis_recs.values() if "maxBrakingTorque" in r)
 
     out = os.path.join(ROOT, "build", MOD_NAME)
+    shutil.rmtree(out, ignore_errors=True)  # never ship stale files from an earlier build
     tw = os.path.join(out, "r6", "tweaks")
     os.makedirs(tw, exist_ok=True)
-    audio_recs = {}
-    for veh, (player, traffic) in SOUND["audition"].items():
-        assert tdb.has(f"Vehicle.{veh}.player_audio_resource"), veh
-        audio_recs[veh] = {"player_audio_resource": player, "traffic_audio_resource": traffic}
     for stem, recs_out, title in [(MOD_NAME, engine_recs, "engines"),
-                                  (f"{MOD_NAME}_Chassis", chassis_recs, "chassis"),
-                                  (f"{MOD_NAME}_Audio", audio_recs, "audio")]:
-        if not recs_out:
-            continue
+                                  (f"{MOD_NAME}_Chassis", chassis_recs, "chassis")]:
         open(os.path.join(tw, f"{stem}.yaml"), "w").write(to_yaml(recs_out, title))
         open(os.path.join(tw, f"{stem}.json"), "w").write(to_json(recs_out) + "\n")
     about = {"ModInfo": {"ModName": MOD_NAME, "ModID": -1}}
@@ -561,8 +482,7 @@ def main():
     packed = []
     for depot, pts in sorted(curve_files.items()):
         raw = curvewriter.build(pts, platform=PLATFORM)
-        seg = raw if STORAGE == "raw" else rdar.kark_stored(raw)
-        packed.append((depot, seg, len(raw)))
+        packed.append((depot, raw, len(raw)))
     hybrid_audio = None
     if SOUND["hybrid"]:
         vanilla_audio = rdar.extract(audio_hybrid.GAME_ARCHIVE, audio_hybrid.DEPOT_PATH)
@@ -585,9 +505,6 @@ def main():
         rpt.write(f"G={G:.5f}  target={accel.TARGET_KMH_SPEEDO:.0f} km/h speedometer "
                   f"({accel.TARGET_MS:.2f} m/s)  mass x{CHASSIS['mass_factor']}\n\n")
         for e, (lbl, f, g) in sorted(engines.items()):
-            if e not in designs:
-                rpt.write(f"{lbl}\n  KEPT VANILLA\n")
-                continue
             dz = designs[e]
             rpt.write(f"{lbl}\n  -> Vehicle.{e}  torque x{dz['k']:.3f}  base speed {dz['xb']:.0%} of "
                       f"{dz['vmax']:.1f} m/s  curve {engine_recs[e]['gearCurvesPath'].split(chr(92))[-1]}\n")
