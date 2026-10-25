@@ -79,8 +79,10 @@ toggling the mod from the main menu), cars either do not move or cannot stop.
   replace that file. Working in-game. An A/B test against the Rayfield Caliburn's engine
   section was rejected: the Caliburn keeps combustion pops and crackles. A true EV whine
   needs custom audio files (open to contributions).
-- mod.io: hidden mod 6480290 with v0.1.0 Mac and PC files. Platform tags can only be set by
-  the Cyberpunk 2077 admin team. PC and console builds are not playtested.
+- mod.io: hidden mod 6480290, one v0.2.0 file (8378236) for every platform. Platform tags can
+  only be set by the Cyberpunk 2077 admin team. The uploaded file uses PC-labelled resources,
+  like every approved mod checked (they ship byte-identical PC-labelled archives to Mac and the
+  consoles); it has not itself been playtested on Mac or consoles.
 
 ## Repository layout
 
@@ -116,13 +118,15 @@ Python 3 (standard library only), Xcode command line tools, Homebrew.
    ```
 3. Build the Kraken decompressor: `sh tools/ooz_port/build.sh`
 4. Extract the vanilla torque curves: `python3 tools/extract_curves.py`
-5. Generate the mod: `python3 tools/build_ev.py mac` (or `pc`, which needs
+5. Generate the mod: `python3 tools/build_ev.py pc`. This needs
    `extracted/win/archive/pc/content/audio_1_general.archive` from the first part of the
    Windows installer: `lgogdownloader --download-file "gogdownloader://cyberpunk_2077_game/en1installer1"`,
-   then `innoextract --gog -I /archive/pc/content/audio_1_general.archive`).
-   Package with `python3 tools/package.py mac|windows|ps5|xboxseriesx|switch2`. (about 90 s the first time, about 15 s after
-   that: TweakDB lookups are cached in `build/tweakdb_lookup_cache.json`, and lookups and
-   engine fitting run on all CPU cores).
+   then `innoextract --gog -I /archive/pc/content/audio_1_general.archive`.
+   `python3 tools/build_ev.py mac` makes a Mac-labelled build for local testing on the Mac.
+   About 90 s the first time, about 15 s after that: TweakDB lookups are cached in
+   `build/tweakdb_lookup_cache.json`, and lookups and engine fitting run on all CPU cores.
+6. Package the upload: `python3 tools/package.py` writes `dist/EVConversion-<version>.zip`, the
+   single file for every platform.
 
 Paths to the game install are currently hard-coded for the GOG Mac build
 (`/Applications/Cyberpunk 2077`).

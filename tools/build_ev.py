@@ -57,7 +57,8 @@ CURVE_DIR = "base\\gameplay\\vehicles\\curves\\engine_torque\\ev_conversion"
 CURVE_STEP = 0.01   # base-speed fractions are rounded to this, so engines share curve files
 # Build targets: cooking-platform stamp for our curve files, and the vanilla audio archive the
 # hybrid sound file is built from (Windows and Mac copies differ only in that stamp).
-# "pc" serves Windows and, as with other console-approved archive mods, the consoles.
+# "pc" is the uploaded build for every platform: approved mods ship PC-labelled archives
+# byte-identical to Mac and the consoles. "mac" is kept for local testing on the Mac.
 TARGETS = {
     "mac": {"platform": "PLATFORM_Mac", "out": "EVConversion",
             "audio": "/Applications/Cyberpunk 2077/archive/Mac/content/audio_1_general.archive"},
