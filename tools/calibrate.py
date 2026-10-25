@@ -37,6 +37,13 @@ MEASUREMENTS = [
 ]
 # The EV times above were measured on this build (gear/curve/torque values come from it).
 MEASURED_BUILD = "04e9af7"
+# Validation: EV times on the build fitted from the data above (not used for fitting).
+# Target = vanilla times above. Hella 8.59 s (-1.3%), Sport R-7 4.42 s (+2.3%).
+VALIDATION = {
+    "build": "4415aa3",
+    "v_standard2_archer_hella_getto_inline5": [8.72, 8.49, 8.55],
+    "v_sport1_quadra_sport_r7_rocket_inline3": [4.46, 4.39, 4.41],
+}
 # Copy of that build kept for re-fitting (build/EVConversion is overwritten by every build).
 BUILD = os.path.join(b.ROOT, "build", f"measured_{MEASURED_BUILD}")
 

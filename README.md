@@ -58,6 +58,9 @@ take effect together after a full restart. If only one of them is active (for ex
 toggling the mod from the main menu), cars either do not move or cannot stop.
 
 - Engines, chassis and brakes: working in-game.
+- Acceleration: calibrated to in-game stopwatch times (0-62 mph shown, 3 runs each).
+  Validated on a build not used for fitting: Archer Hella 8.59 s vs vanilla 8.70 s,
+  Sport R-7 "Vigilante" 4.42 s vs vanilla 4.32 s. See `tools/calibrate.py`.
 - Custom torque curves: working. Curve files must be stored raw in the archive (stored size ==
   real size). A Kraken header around uncompressed data is not readable by the game.
 - Sound: hybrid profiles (`tools/audio_hybrid.py`). Every car and bike keeps its own sound
@@ -84,6 +87,8 @@ toggling the mod from the main menu), cars either do not move or cannot stop.
 | `tools/audio_hybrid.py` | Builds the hybrid vehicle sound profiles. |
 | `tools/extract_audio_meta.py` | Extracts the vehicle audio metadata for inspection. |
 | `tools/extract_curves.py` | Extracts the vanilla engine torque curves (setup step 4). |
+| `tools/calibrate.py` | Fits the acceleration model constants to in-game stopwatch times; holds the measurements. |
+| `tools/find_in_archives.py` | Searches the contents of every game archive for a byte string. |
 | `tools/ooz_port/` | macOS/Apple Silicon build of the ooz Kraken decompressor (fetched at build time). |
 
 ## Setup (macOS)
