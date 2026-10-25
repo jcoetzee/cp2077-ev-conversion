@@ -1,0 +1,26 @@
+# Secrets
+.modio_key
+
+# Game files and anything extracted from them (CD PROJEKT RED content, not ours to share)
+redmod/
+extracted/
+installers/
+
+# Other creators' mods downloaded for format reference
+reference/
+
+# Build outputs (the mod package is distributed through mod.io)
+build/
+
+# Third-party sources fetched by tools/ooz_port/build.sh, and their build products
+tools/ooz/
+tools/ooz_port/kraken_lib.cpp
+tools/ooz_port/lzna.cpp
+tools/ooz_port/bitknit.cpp
+tools/ooz_port/*.dylib
+
+# Python / macOS
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
