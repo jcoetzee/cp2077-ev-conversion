@@ -83,7 +83,7 @@ toggling the mod from the main menu), cars either do not move or cannot stop.
 | `tools/tweakdb.py` | Checks which record names exist in the compiled `tweakdb.bin`. |
 | `tools/rdar.py` | Reader and writer for REDengine 4 `.archive` files. |
 | `tools/curveset.py`, `tools/curvewriter.py` | Read and write cooked `.curveset` (CR2W) files. Writer reproduces vanilla files byte for byte. |
-| `tools/cr2w_walk.py`, `tools/cr2w_probe.py` | Read-only CR2W inspection. |
+| `tools/cr2w_walk.py` | Read-only CR2W inspection. |
 | `tools/cr2w_edit.py` | Rebuilds a CR2W file with export chunks replaced (round-trips vanilla files byte for byte). |
 | `tools/audio_hybrid.py` | Builds the hybrid vehicle sound profiles. |
 | `tools/extract_audio_meta.py` | Extracts the vehicle audio metadata for inspection. |
