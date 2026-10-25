@@ -90,7 +90,9 @@ def _assemble(c, i, parts):
     return c.d[off : off + 1] + b"".join(parts) + tail
 
 
-def build_hybrid(data: bytes):
+def build_hybrid(data: bytes, exclude=()):
+    """exclude: profile names left vanilla (vehicles that stay ICE)."""
+    exclude = set(exclude)
     c = CR2W(data)
     profiles = {}
     for i in range(len(c.exports)):
@@ -118,7 +120,7 @@ def build_hybrid(data: bytes):
 
     replace, report = {}, []
     for name, (i, props, pmap) in sorted(profiles.items()):
-        if not name.startswith(TARGET_PREFIXES):
+        if not name.startswith(TARGET_PREFIXES) or name in exclude:
             continue
         donor = donor_for(name)
         mech_bytes, banks, rpm = donor_parts(donor)
@@ -149,7 +151,7 @@ def build_hybrid(data: bytes):
     return cr2w_edit.rebuild(data, replace), report
 
 
-def verify(out: bytes, report, src: bytes):
+def verify(out: bytes, report, src: bytes, exclude=()):
     """Re-parse the output and check every converted profile against its donor as it is
     in the vanilla file (a donor can itself be a converted target)."""
     c = CR2W(out)
@@ -193,6 +195,13 @@ def verify(out: bytes, report, src: bytes):
         vgen = v.value(*vt["generalData"][1:])
         assert {k: x for k, x in tgen.items() if k not in BANK_FIELDS} == \
                {k: x for k, x in vgen.items() if k not in BANK_FIELDS}, name
+    # profiles left vanilla must be untouched
+    for name in exclude:
+        assert name in vanilla, f"excluded profile {name} not in the file"
+        a = {k: c.value(*p[1:]) for k, p in profiles[name].items()}
+        b = {k: v.value(*p[1:]) for k, p in vanilla[name].items()}
+        assert a == b, f"excluded profile {name} changed"
+        assert name not in {r[0] for r in report}, name
     return seen
 
 

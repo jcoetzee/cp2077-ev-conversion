@@ -81,11 +81,12 @@ import accel  # noqa: E402
 import audio_hybrid  # noqa: E402
 import curvewriter  # noqa: E402
 import ev_single  # noqa: E402
+import ice_exclusions  # noqa: E402
 import rdar  # noqa: E402
 
 MOD_NAME = "EVConversion"
 MOD_ID = 6480290  # mod.io: https://mod.io/g/cyberpunk-2077/m/ev-conversion
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
 
 def load_records(package="Vehicle"):
@@ -384,25 +385,10 @@ def vanilla_bands(f, gears):
     return fwd
 
 
-def main(target="mac"):
-    tgt = TARGETS[target]
-    import time
-    from concurrent.futures import ProcessPoolExecutor
-    import multiprocessing as mp
-
-    from tweakdb import TweakDB
-
-    sys.stdout.reconfigure(line_buffering=True)  # progress shows up when redirected to a log
-    t0 = time.time()
-
-    def step(msg):
-        print(f"[{time.time() - t0:6.1f}s] {msg}")
-
-    tdb = TweakDB()
-    recs = load_records()
+def discover(recs, tdb):
+    """Compiled engine and drive-model records, and {vehicle: (engine, drive model)}."""
     found_engines = find_engines(recs, tdb)
     found_drives = find_drive_models(recs, tdb)
-    step(f"found {len(found_engines)} engine and {len(found_drives)} drive-model records")
     engines = {c: (lbl, f, g) for c, lbl, f, g, _o in found_engines if g and len(g) >= 2}
     drives = {c: (lbl, f) for c, lbl, f, _g, _o in found_drives}
     inline_engine = {o: c for c, _l, _f, _g, o in found_engines if o}
@@ -422,6 +408,53 @@ def main(target="mac"):
         e, d = compiled(e_links.get(v), inline_engine), compiled(d_links.get(v), inline_drive)
         if e in engines and d in drives:
             vehicles[v] = (e, d)
+    return engines, drives, vehicles
+
+
+def vehicle_map(recs, tdb):
+    _engines, drives, vehicles = discover(recs, tdb)
+    return vehicles, drives
+
+
+def main(target="mac"):
+    tgt = TARGETS[target]
+    import time
+    from concurrent.futures import ProcessPoolExecutor
+    import multiprocessing as mp
+
+    from tweakdb import TweakDB
+
+    sys.stdout.reconfigure(line_buffering=True)  # progress shows up when redirected to a log
+    t0 = time.time()
+
+    def step(msg):
+        print(f"[{time.time() - t0:6.1f}s] {msg}")
+
+    tdb = TweakDB()
+    recs = load_records()
+    engines, drives, vehicles = discover(recs, tdb)
+    step(f"found {len(engines)} engine and {len(drives)} drive-model records")
+
+    # Vehicles that stay vanilla ICE (Nomad vehicles, Porsche 911): see ice_exclusions.py
+    ice = ice_exclusions.analyse(sys.modules[__name__], recs, tdb, vehicles, drives)
+    if ice["conflicts"]:
+        sys.exit(f"ICE exclusion conflicts: {ice['conflicts']}")
+    step(f"{len(ice['vehicles'])} vehicles stay ICE: {len(ice['engines'])} engines, "
+         f"{len(ice['drive_models'])} drive models, {len(ice['wheels'])} wheel presets, "
+         f"{len(ice['sounds'])} sound profiles kept vanilla")
+    engines = {e: v for e, v in engines.items() if e not in ice["engines"]}
+    vehicles = {v: ed for v, ed in vehicles.items() if v not in ice["vehicles"]}
+    # Engine records shared with an ICE vehicle: converted users get a new copy of the record
+    # ($base = vanilla record) and their vehEngineData is pointed at it.
+    split_engines, repoint = {}, {}
+    all_engines, _d, _v = discover(recs, tdb)
+    for e, users_of in ice["engine_splits"].items():
+        new = f"{MOD_NAME}_{e}"
+        engines[new] = all_engines[e]
+        split_engines[new] = e
+        for v in users_of:
+            vehicles[v] = (new, vehicles[v][1])
+            repoint[v] = new
 
     # Model constants fitted to in-game stopwatch times (see accel.py, tools/calibrate.py)
     G = accel.G
@@ -463,6 +496,7 @@ def main(target="mac"):
         depot = f"{CURVE_DIR}\\ev_{cap_tag}_xb{round(key * 1000):04d}{ptag}.curveset"
         curve_files[depot] = ev_single.ev_curve(key, SOUND["rpm_cap"], pkey)
         engine_recs[e] = {
+            **({"$base": f"Vehicle.{split_engines[e]}"} if e in split_engines else {}),
             "engineMaxTorque": round(num(f, "engineMaxTorque", "180") * dz["k"], 2),
             "gearCurvesPath": depot,
             **({"gearChangeTime": EV["shift_time"], "gearChangeCooldown": EV["shift_time"]}
@@ -472,14 +506,17 @@ def main(target="mac"):
             "resistanceTorque": round(num(f, "resistanceTorque", "100") * EV["resistance_scale"], 2),
             "gears": [dict(g[0])] + [{k: float(v) for k, v in band.items()} for band in dz["bands"]],
         }
+    for v, new in repoint.items():
+        engine_recs[v] = {"vehEngineData": f"Vehicle.{new}"}
     bike_drives = {d for v, (e, d) in vehicles.items() if "bike" in v or "_2w" in d}
-    chassis_recs = {d: convert_chassis(f, d in bike_drives or "2w" in d) for d, (lbl, f) in drives.items()}
+    chassis_recs = {d: convert_chassis(f, d in bike_drives or "2w" in d) for d, (lbl, f) in drives.items()
+                    if d not in ice["drive_models"]}
     # Brakes: same braking torque per kg as vanilla, so stopping distances are unchanged
     wheel_presets = find_wheel_presets(recs, tdb)
     tdb.save()
     step(f"found {len(wheel_presets)} wheel preset records")
     for c, _lbl, f in wheel_presets:
-        if "maxBrakingTorque" in f:
+        if "maxBrakingTorque" in f and c not in ice["wheels"]:
             chassis_recs[c] = {"maxBrakingTorque": round(num(f, "maxBrakingTorque", "0") * CHASSIS["mass_factor"], 1),
                                "frictionMulLongitudinal": round(num(f, "frictionMulLongitudinal", "1") * CHASSIS["grip_factor"], 4)}
     n_brakes = sum(1 for r in chassis_recs.values() if "maxBrakingTorque" in r)
@@ -504,8 +541,8 @@ def main(target="mac"):
     hybrid_audio = None
     if SOUND["hybrid"]:
         vanilla_audio = rdar.extract(tgt["audio"], audio_hybrid.DEPOT_PATH)
-        hybrid_audio, audio_report = audio_hybrid.build_hybrid(vanilla_audio)
-        audio_hybrid.verify(hybrid_audio, audio_report, vanilla_audio)
+        hybrid_audio, audio_report = audio_hybrid.build_hybrid(vanilla_audio, exclude=ice["sounds"])
+        audio_hybrid.verify(hybrid_audio, audio_report, vanilla_audio, exclude=ice["sounds"])
         packed.append((audio_hybrid.DEPOT_PATH, hybrid_audio, len(hybrid_audio)))
     arc_path = os.path.join(out, "archive", f"{MOD_NAME}.archive")
     rdar.write_archive(arc_path, packed)

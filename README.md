@@ -7,6 +7,12 @@ Each vehicle keeps its own character: top speed and 0-100 km/h are unchanged, dr
 (FWD/RWD/AWD) are unchanged, and the conversion is applied uniformly so no vehicle gains an
 advantage.
 
+**Stays combustion (vanilla):** Nomad vehicles and the Porsche 911 Turbo (930). In-game lore
+has Night City running on CHOOH2 combustion; the mod electrifies the city and leaves the
+Badlands rigs and Johnny's classic as they are. The list lives in `tools/ice_exclusions.py`
+(base models plus every scripted, quest and police-heat variant that uses the same engine and
+chassis). Excluded vehicles keep their vanilla engine, chassis, brakes, grip and sound.
+
 ## What the mod changes
 
 | Area | Change |
@@ -25,26 +31,27 @@ Tweak records (`r6/tweaks/`), applied to every compiled record of each kind:
 
 | Record | Field | Change | Records |
 |---|---|---|---|
-| Engine (`VehicleEngineData`) | `gears` | Reverse kept; forward gears replaced by a 0-3 m/s launch gear and a main gear to vanilla top speed, idle to redline with continuous RPM | 81 |
-| | `gearChangeTime`, `gearChangeCooldown` | 0.01 s (launch-gear change and reverse; vanilla 0.2-0.4 s would leave a drive gap at 3 m/s) | 81 |
-| | `gearCurvesPath` | Points to an EV torque curve in the mod archive | 81 |
-| | `engineMaxTorque` | Scaled per engine by the 0-100 calibration (x0.23 to x2.08, median x0.74) | 81 |
-| | `finalGearTorqueDecimationScalor` | 1.0 (vanilla cuts top-gear torque; with one gear that cut would apply at every speed) | 81 |
-| | `flyWheelMomentOfInertia` | x0.5 | 81 |
-| | `resistanceTorque` | x1.5 | 81 |
-| Drive model (`vehDriveModelData` / `bikeDriveModelData`) | `total_mass`, `chassis_mass` | x1.10 | 117 |
-| | `momentOfInertia` | x1.10 (where set) | 89 |
-| | `center_of_mass_offset` | z lowered 5 cm (cars only) | 108 |
-| | `handbrakeBrakingTorque` | x1.10 | 117 |
-| Wheel preset (front/back) | `maxBrakingTorque` | x1.10 | 230 |
-| | `frictionMulLongitudinal` | x1.10 (the game's grip is a fixed force; this keeps grip per kg at vanilla for launches and braking) | 230 |
+| Engine (`VehicleEngineData`) | `gears` | Reverse kept; forward gears replaced by a 0-3 m/s launch gear and a main gear to vanilla top speed, idle to redline with continuous RPM | 72 |
+| | `gearChangeTime`, `gearChangeCooldown` | 0.01 s (launch-gear change and reverse; vanilla 0.2-0.4 s would leave a drive gap at 3 m/s) | 72 |
+| | `gearCurvesPath` | Points to an EV torque curve in the mod archive | 72 |
+| | `engineMaxTorque` | Scaled per engine by the 0-100 calibration (x0.23 to x2.08, median x0.72) | 72 |
+| | `finalGearTorqueDecimationScalor` | 1.0 (vanilla cuts top-gear torque; with one gear that cut would apply at every speed) | 72 |
+| | `flyWheelMomentOfInertia` | x0.5 | 72 |
+| | `resistanceTorque` | x1.5 | 72 |
+| Drive model (`vehDriveModelData` / `bikeDriveModelData`) | `total_mass`, `chassis_mass` | x1.10 | 105 |
+| | `momentOfInertia` | x1.10 (where set) | 77 |
+| | `center_of_mass_offset` | z lowered 5 cm (cars only) | 96 |
+| | `handbrakeBrakingTorque` | x1.10 | 105 |
+| Wheel preset (front/back) | `maxBrakingTorque` | x1.10 | 208 |
+| | `frictionMulLongitudinal` | x1.10 (the game's grip is a fixed force; this keeps grip per kg at vanilla for launches and braking) | 208 |
+| Vehicle `v_standard2_thorton_galena_ncu` (Galena "The Rat") | `vehEngineData` | Points to a new converted copy of its engine record; it shared its engine with the ICE Galena "Rattler" | 1 |
 
 Archive files (`archive/EVConversion.archive`):
 
 | File | Change |
 |---|---|
-| `base\gameplay\vehicles\curves\engine_torque\ev_conversion\*.curveset` | New: 41 EV torque curves, shared between engines |
-| `base\sound\metadata\cooked_metadata.audio_metadata` | Replaces vanilla: 172 car and bike sound profiles get the Basilisk's engine section; gear-shift sweeteners removed |
+| `base\gameplay\vehicles\curves\engine_torque\ev_conversion\*.curveset` | New: 37 EV torque curves, shared between engines |
+| `base\sound\metadata\cooked_metadata.audio_metadata` | Replaces vanilla: 153 car and bike sound profiles (all except the 19 ICE ones) get the Basilisk's engine section; gear-shift sweeteners removed |
 
 Not changed: drivetrains, top speed, cornering grip, suspension, steering, the reverse gear,
 and every non-vehicle record.
