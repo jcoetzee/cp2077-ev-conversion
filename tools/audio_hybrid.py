@@ -33,8 +33,10 @@ TRAFFIC_DONOR = "v_av_basilisk_tank_traffic"
 
 # A/B crossover: profile name prefix -> donor (player profile). Traffic profiles of the
 # same family use the donor's "_traffic" profile. Everything not listed uses DONOR.
-# Session 1: Hella = Basilisk, Sport R-7 = Caliburn. Session 2 swaps them.
-AB_SESSION = 1
+# Result of session 1 (Hella = Basilisk, Sport R-7 = Caliburn): the Caliburn engine keeps
+# combustion pops and crackles, so every vehicle uses the Basilisk. AB_SESSION = 0 disables
+# overrides; the families are kept for future auditions.
+AB_SESSION = 0
 AB_FAMILIES = {
     1: {"v_car_archer_hella": "v_av_basilisk_tank", "v_car_quadra_sport_r7": "v_car_rayfield_caliburn"},
     2: {"v_car_archer_hella": "v_car_rayfield_caliburn", "v_car_quadra_sport_r7": "v_av_basilisk_tank"},

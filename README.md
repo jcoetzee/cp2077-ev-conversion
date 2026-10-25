@@ -17,7 +17,7 @@ advantage.
 | Response | Flywheel inertia halved; lift-off resistance x1.5 (regen-like). |
 | Chassis | Mass and moment of inertia +10% (battery pack, 2077 cell density assumed); centre of mass 5 cm lower on cars. |
 | Brakes | Brake and handbrake torque +10%, so stopping distances match vanilla. |
-| Sound | Work in progress: borrowing the Basilisk's engine sound (see Status). |
+| Sound | Engine sound replaced by the Basilisk hover tank's on every car and bike; brakes, tyres, horn, doors and radio unchanged; no shift sounds. |
 
 ## Status
 
@@ -30,7 +30,9 @@ Tested on the macOS build (GOG, Update 2.5).
   profile (brakes, tyres, horn, doors, radio) with the engine section replaced by the
   Basilisk hover tank's, and gear-shift sweeteners removed. Ships as a replacement of
   `base\sound\metadata\cooked_metadata.audio_metadata`, so it conflicts with other mods that
-  replace that file. In-game test pending.
+  replace that file. Working in-game. An A/B test against the Rayfield Caliburn's engine
+  section was rejected: the Caliburn keeps combustion pops and crackles. A true EV whine
+  needs custom audio files (open to contributions).
 - Not yet done: PC/console-stamped curve files, standalone mod folder, mod.io upload.
 
 ## Repository layout
