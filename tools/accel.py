@@ -12,8 +12,10 @@ Model (per vehicle):
     Its only effect on the result is how much a fixed-length shift gap costs, so it is
     set from one reference time and refined from in-game stopwatch measurements.
 
-Speeds in the gear tables are in m/s. The in-game speedometer reads about twice the
-real speed (community research), so "100 km/h on the speedometer" is 50 km/h real.
+Speeds in the gear tables are in game units. The HUD shows mph = speed x m(speed), where m
+is the vanilla curve 'speed_to_multiplier' (vehicle_ui curve set, see car_hud.script),
+interpolated linearly here. km/h shown = mph shown x 1.60934. So "100 km/h on the
+speedometer" is about 21.1 game units, the same for every vehicle.
 """
 import glob
 import os
@@ -22,14 +24,48 @@ import curveset
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CURVE_DIR = os.path.join(os.path.dirname(HERE), "extracted", "curves")
+SPEEDO_CURVE_FILE = os.path.join(CURVE_DIR, "vehicle_ui_speed_to_multiplier.bin")
 
-SPEEDO_FACTOR = 2.0                      # speedometer reading / real speed
+
+def shown_mph(speed, pts=None):
+    """Speedometer reading (mph) for a speed in game units."""
+    pts = pts or _speedo_points()
+    if speed >= pts[-1][0]:
+        return speed * pts[-1][1]
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        if x0 <= speed <= x1:
+            return speed * (y0 + (y1 - y0) * (speed - x0) / (x1 - x0))
+    return speed * pts[0][1]
+
+
+def units_for_shown_kmh(kmh):
+    """Game-unit speed at which the speedometer shows `kmh` (shown_mph is increasing)."""
+    target_mph = kmh / 1.60934
+    lo, hi = 0.0, 200.0
+    for _ in range(80):
+        mid = (lo + hi) / 2
+        lo, hi = (mid, hi) if shown_mph(mid) < target_mph else (lo, mid)
+    return (lo + hi) / 2
+
+
+def _speedo_points():
+    if not _SPEEDO:
+        _SPEEDO.extend(curveset.read_curve(open(SPEEDO_CURVE_FILE, "rb").read(), "speed_to_multiplier"))
+    return _SPEEDO
+
+
+_SPEEDO = []
 TARGET_KMH_SPEEDO = 100.0
-TARGET_MS = TARGET_KMH_SPEEDO / SPEEDO_FACTOR / 3.6
+TARGET_MS = units_for_shown_kmh(TARGET_KMH_SPEEDO)  # name kept for callers: game units
 
-# Reference used to fix G until we have in-game measurements: the player's starting
-# Hella reaching 100 km/h on the speedometer in this many seconds (vanilla).
-REFERENCE_SECONDS = 4.0
+# Measured in-game (vanilla, full restart, 3 runs each, stopwatch to 62 mph shown):
+#   Archer Hella EC-D I360        8.69, 8.46, 8.95 s  (mean 8.70)
+#   Quadra Sport R-7 "Vigilante"  4.34, 4.29, 4.34 s  (mean 4.32)
+# G is set from the Hella. Without a grip limit the model then gives the R-7 3.04 s, so a
+# tyre-grip cap on acceleration (same for every car: grip scales with weight) is fitted to
+# the R-7. Two measurements fix both values, so this fit is not yet independently checked.
+REFERENCE_SECONDS = 8.70
+A_MAX = 5.536  # game units/s^2
 
 _CURVES = {}
 
@@ -50,9 +86,13 @@ def interp(pts, x):
     return pts[-1][1]
 
 
-def time_to(target, bands, torque, mass, curve, min_rpm, max_rpm, shift_time, G, dt=0.002):
+def time_to(target, bands, torque, mass, curve, min_rpm, max_rpm, shift_time, G, dt=0.002,
+            a_max=None):
     """Seconds from standstill to `target` m/s. bands: forward gear dicts.
-    curve: curve name, or a list of (x, y) points."""
+    curve: curve name, or a list of (x, y) points. a_max: optional tyre-grip limit on
+    acceleration (game units/s^2); grip scales with weight, so it does not depend on mass."""
+    if a_max is None:
+        a_max = A_MAX
     pts = curve if isinstance(curve, list) else curve_points(curve)
     v, t, idx, gap = 0.0, 0.0, 0, 0.0
     while v < target:
@@ -71,7 +111,7 @@ def time_to(target, bands, torque, mass, curve, min_rpm, max_rpm, shift_time, G,
         frac = min(max((v - b["minSpeed"]) / span, 0.0), 1.0)
         rpm = b["minEngineRPM"] + frac * (b["maxEngineRPM"] - b["minEngineRPM"])
         x = (rpm - min_rpm) / max(max_rpm - min_rpm, 1.0)
-        v += G * torque * interp(pts, x) * b["torqueMultiplier"] / mass * dt
+        v += min(G * torque * interp(pts, x) * b["torqueMultiplier"] / mass, a_max) * dt
         t += dt
     return t
 

@@ -35,6 +35,29 @@ def platform(data: bytes) -> str:
     return data[i : data.index(b"\0", i)].decode() if i >= 0 else "?"
 
 
+def read_curve(data: bytes, name=None):
+    """Points of a named Float curve in a CurveSet, read by walking the CR2W properties
+    (works for any x range, unlike find_curve which expects x in 0..1).
+    Value layout: u32 count, count x (f32 x, f32 y), u8 interpolation, u8 link type."""
+    from cr2w_walk import CR2W
+
+    c = CR2W(data)
+    props = {p[0]: p for p in c.export_props(0)}
+    _n, _t, off, size = props["curves"]
+    (count,) = struct.unpack_from("<I", data, off)
+    pos = off + 4
+    for _ in range(count):
+        entry = {p[0]: p for p in c.read_struct(pos + 1, off + size)}
+        ename = c.value(*entry["name"][1:])
+        _cn, _ct, coff, csize = entry["curve"]
+        if name is None or ename == name:
+            (n,) = struct.unpack_from("<I", data, coff)
+            return [struct.unpack_from("<ff", data, coff + 4 + 8 * k) for k in range(n)]
+        last = list(entry.values())[-1]
+        pos = last[2] + last[3] + 2
+    raise KeyError(name)
+
+
 if __name__ == "__main__":
     for path in sys.argv[1:]:
         data = open(path, "rb").read()

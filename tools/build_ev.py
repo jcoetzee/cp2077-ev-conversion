@@ -512,7 +512,7 @@ def main():
 
     with open(os.path.join(ROOT, "build", "engine_report.txt"), "w") as rpt:
         rpt.write(f"G={G:.5f}  target={accel.TARGET_KMH_SPEEDO:.0f} km/h speedometer "
-                  f"({accel.TARGET_MS:.2f} m/s)  mass x{CHASSIS['mass_factor']}\n\n")
+                  f"({accel.TARGET_MS:.2f} game units)  grip limit {accel.A_MAX} units/s^2  mass x{CHASSIS['mass_factor']}\n\n")
         for e, (lbl, f, g) in sorted(engines.items()):
             dz = designs[e]
             rpt.write(f"{lbl}\n  -> Vehicle.{e}  torque x{dz['k']:.3f}  base speed {dz['xb']:.0%} of "

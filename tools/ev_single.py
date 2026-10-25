@@ -93,7 +93,9 @@ def design(curve_name, vanilla_bands, T, min_rpm, max_rpm, vanilla_shift, masses
                 hi = mid
         xb = (lo + hi) / 2
     ks = sorted(k_for(xb, m) for m in masses)
-    k = ks[len(ks) // 2]
+    # Shared engines: one torque value for vehicles of different mass. The midpoint of the
+    # extremes balances the error between the lightest and heaviest user (minimax).
+    k = (ks[0] + ks[-1]) / 2
     timing = [(m, t_van(m, accel.TARGET_MS), t_ev(k, xb, m, accel.TARGET_MS),
                t_van(m, v_hi), t_ev(k, xb, m, v_hi)) for m in masses]
     return dict(k=k, xb=xb, curve=ev_curve(xb, rpm_cap), bands=bands, vmax=vmax, timing=timing)
