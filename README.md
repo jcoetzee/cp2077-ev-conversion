@@ -91,4 +91,9 @@ CD PROJEKT RED Fan Content Guidelines and User Agreement.
 
 ## Licence
 
-To be decided.
+MIT, see [LICENSE](LICENSE). This covers the scripts in this repository only.
+
+`tools/ooz_port/build.sh` downloads and compiles [ooz](https://github.com/powzix/ooz)
+(GPLv3) and [sse2neon](https://github.com/DLTcollab/sse2neon) (MIT) at build time. Neither
+is included here, and the compiled `libooz.dylib` falls under ooz's GPLv3 licence.
+Cyberpunk 2077 game data is not covered by this licence and is not included.
