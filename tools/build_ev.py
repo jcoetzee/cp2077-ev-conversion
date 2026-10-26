@@ -86,6 +86,9 @@ import ice_exclusions  # noqa: E402
 import rdar  # noqa: E402
 
 MOD_NAME = "EVConversion"
+# Official cross-platform layout (mod.io guide "How-to: Create Mods for Cross-Platform Mod
+# Support"): archives go in archive/pc/mod/.
+ARCHIVE_DIR = ("archive", "pc", "mod")
 MOD_ID = 6480290  # mod.io: https://mod.io/g/cyberpunk-2077/m/ev-conversion
 VERSION = "0.2.0"
 
@@ -520,7 +523,7 @@ def main(target="mac"):
     open(os.path.join(out, "about.json"), "w").write(json.dumps(about, indent="\t") + "\n")
 
     # Torque curves: cooked CurveSet files packed into one archive
-    os.makedirs(os.path.join(out, "archive"), exist_ok=True)
+    os.makedirs(os.path.join(out, *ARCHIVE_DIR), exist_ok=True)
     packed = []
     for depot, pts in sorted(curve_files.items()):
         raw = curvewriter.build(pts, platform=tgt["platform"])
@@ -531,7 +534,7 @@ def main(target="mac"):
         hybrid_audio, audio_report = audio_hybrid.build_hybrid(vanilla_audio, exclude=ice["sounds"])
         audio_hybrid.verify(hybrid_audio, audio_report, vanilla_audio, exclude=ice["sounds"])
         packed.append((audio_hybrid.DEPOT_PATH, hybrid_audio, len(hybrid_audio)))
-    arc_path = os.path.join(out, "archive", f"{MOD_NAME}.archive")
+    arc_path = os.path.join(out, *ARCHIVE_DIR, f"{MOD_NAME}.archive")
     rdar.write_archive(arc_path, packed)
     step(f"archive written ({len(packed)} files)")
     # read every file back through the archive reader + curve decoder

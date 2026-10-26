@@ -48,7 +48,7 @@ Tweak records (`r6/tweaks/`), applied to every compiled record of each kind:
 | Wheel preset (front/back) | `maxBrakingTorque` | x1.10 | 208 |
 | | `frictionMulLongitudinal` | x1.10 (the game's grip is a fixed force; this keeps grip per kg at vanilla for launches and braking) | 208 |
 
-Archive files (`archive/EVConversion.archive`):
+Archive files (`archive/pc/mod/EVConversion.archive`, the layout from the official cross-platform guide):
 
 | File | Change |
 |---|---|

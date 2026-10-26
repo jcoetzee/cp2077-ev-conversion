@@ -1,6 +1,7 @@
 """Package the mod into the single mod.io upload zip used for every platform.
 
-Layout (as in console-approved mods): about.json, r6/tweaks/*, archive/* at the root.
+Layout (mod.io guide "How-to: Create Mods for Cross-Platform Mod Support"): about.json,
+r6/tweaks/*.yaml + *.json, archive/pc/mod/*.archive.
 The zip is made from build/EVConversion_pc (python3 tools/build_ev.py pc): PC-labelled
 resources built from the Windows game data. Approved mods ship PC-labelled archives
 byte-identical to Mac, PlayStation 5, Xbox Series X|S and Nintendo Switch 2, and some use one
@@ -25,7 +26,7 @@ SOURCE = os.path.join(b.ROOT, "build", b.TARGETS["pc"]["out"])
 DIST = os.path.join(b.ROOT, "dist")
 EXPECTED = ["about.json", "r6/tweaks/EVConversion.yaml", "r6/tweaks/EVConversion.json",
             "r6/tweaks/EVConversion_Chassis.yaml", "r6/tweaks/EVConversion_Chassis.json",
-            f"archive/{b.MOD_NAME}.archive"]
+            "/".join(b.ARCHIVE_DIR) + f"/{b.MOD_NAME}.archive"]
 FIXED_TIME = (2026, 1, 1, 0, 0, 0)  # reproducible zips
 
 
