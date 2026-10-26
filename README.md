@@ -79,10 +79,44 @@ toggling the mod from the main menu), cars either do not move or cannot stop.
   replace that file. Working in-game. An A/B test against the Rayfield Caliburn's engine
   section was rejected: the Caliburn keeps combustion pops and crackles. A true EV whine
   needs custom audio files (open to contributions).
-- mod.io: hidden mod 6480290, one v0.2.0 file (8381510) for every platform. Platform tags can
-  only be set by the Cyberpunk 2077 admin team. The uploaded file uses PC-labelled resources,
-  like every approved mod checked (they ship byte-identical PC-labelled archives to Mac and the
-  consoles); it has not itself been playtested on Mac or consoles.
+- mod.io: hidden mod 6480290. v0.2.0 was uploaded as one source file and cooked by mod.io into
+  one file per platform (Windows, Mac, PS5, Xbox Series X|S, Switch 2), all pending CD PROJEKT
+  RED QA review. The upload uses PC-labelled resources, like every approved mod checked (they
+  ship byte-identical PC-labelled archives to Mac and the consoles); it has not itself been
+  playtested on consoles.
+
+## Possible future improvements
+
+Ideas based on mod.io's
+[cross-platform creation guide](https://mod.io/g/cyberpunk-2077/r/how-to-create-mods-for-cross-platform-mod-support)
+and its list of
+[supported content](https://mod.io/g/cyberpunk-2077/r/mod-content-available-in-cross-platform-mod-support).
+None of these have been tried.
+
+- **Scripts.** Redscript-style scripts in `r6/scripts/` are supported on every platform. mod.io's
+  cloud cooking compiles them per platform, and a list of engine functions that are unsafe on
+  console is blocked (the list is not published). Possible uses: drive the engine sound from a
+  script by setting audio parameters at runtime (a fallback if QA rejects the
+  `.audio_metadata` edit), or add stronger regenerative braking when lifting off the throttle.
+  Drawback on macOS: local script testing (`r6/c77`, `-LoadScriptMods`) is only documented for
+  PC, and REDmod's `validate-mod-scripts` is Windows-only, so every change would need an upload
+  and cook to test.
+- **Exhaust effects.** `.effect` files are supported on every platform, so exhaust smoke and
+  backfire flames could be removed for EVs. `.particle` files are PC-only, so the change has to
+  be made in the effect definitions.
+- **Dashboard and HUD.** `.inkwidget`, `.inkatlas` and `.inkstyle` are supported, for example
+  to replace the RPM gauge with a power meter.
+- **In-game text.** Localization `.json`/`.csv` files could update vehicle descriptions (for
+  example on the Autofixer site) to say the cars are electric.
+- **The Rat fully vanilla.** TweakXL record cloning is supported, so the Galena "The Rat" could
+  get its own copy of the Galena GT chassis instead of sharing the EV one
+  (`ICE_SHARED_CHASSIS` in `tools/ice_exclusions.py`). Needs in-game testing first.
+- **Visual changes (later).** `.ent`, `.app` and `.morphtarget` are PC-only for now; mod.io says
+  cross-platform support will come later. That would allow removing exhaust pipes or adding
+  badges.
+
+Not possible on consoles with the current guide: custom audio files (no audio formats are
+listed as supported) and physics files (`.phys`, `.physicalscene` are PC-only).
 
 ## Repository layout
 
