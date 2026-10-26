@@ -79,7 +79,7 @@ toggling the mod from the main menu), cars either do not move or cannot stop.
   replace that file. Working in-game. An A/B test against the Rayfield Caliburn's engine
   section was rejected: the Caliburn keeps combustion pops and crackles. A true EV whine
   needs custom audio files (open to contributions).
-- mod.io: hidden mod 6480290, one v0.2.0 file (8378236) for every platform. Platform tags can
+- mod.io: hidden mod 6480290, one v0.2.0 file (8381510) for every platform. Platform tags can
   only be set by the Cyberpunk 2077 admin team. The uploaded file uses PC-labelled resources,
   like every approved mod checked (they ship byte-identical PC-labelled archives to Mac and the
   consoles); it has not itself been playtested on Mac or consoles.
